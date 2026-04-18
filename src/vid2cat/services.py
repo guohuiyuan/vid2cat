@@ -183,6 +183,8 @@ def generate_cat_image_with_model3(
     profile: dict[str, str],
 ) -> dict[str, str]:
     config = build_model_config(settings, 3)
+    if not settings.get("gitee_token"):
+        raise ValueError("图传未配置 Gitee Token，模型3生成图无法上传")
     prompt = profile.get("image_prompt") or (
         f"根据短视频《{title}》生成一张二次元猫咪图鉴插画，"
         f"猫咪品种为{profile.get('breed', '赛博短视频猫')}，"
@@ -193,23 +195,30 @@ def generate_cat_image_with_model3(
         "画面精致，适合图鉴卡展示。"
     )
     result = AIModelRuntime.generate_image(config, prompt)
-
-    final_url = result.get("url", "")
-    image_host_status = "模型3已直接返回图片地址"
+    source_url = result.get("url", "")
+    final_url = ""
+    image_host_status = ""
     if result.get("b64_json"):
         final_url = ImageHostScaffold.upload_base64_image(result["b64_json"], settings)
         image_host_status = "模型3返回 base64 图片，已上传到配置图床"
-    elif final_url and settings.get("gitee_token"):
-        try:
-            final_url = ImageHostScaffold.mirror_remote_image(final_url, settings)
-            image_host_status = "模型3返回远程图片，已镜像上传到配置图床"
-        except Exception:
-            image_host_status = "模型3返回远程图片，图床镜像失败，暂时保留原始图片地址"
+    elif source_url:
+        final_url = ImageHostScaffold.mirror_remote_image(source_url, settings)
+        image_host_status = "模型3返回远程图片，已镜像上传到配置图床"
+    else:
+        raise RuntimeError("模型3未返回可上传的图片内容")
     return {
         "url": final_url,
         "prompt": result.get("prompt", prompt),
         "status": image_host_status,
-        "raw": json.dumps(result, ensure_ascii=False),
+        "raw": json.dumps(
+            {
+                "uploaded_url": final_url,
+                "source_url": source_url,
+                "status": image_host_status,
+                "prompt": result.get("prompt", prompt),
+            },
+            ensure_ascii=False,
+        ),
     }
 
 
