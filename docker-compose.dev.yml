@@ -6,10 +6,10 @@ services:
     container_name: vid2cat-dev
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      - "8080:8080"
     environment:
       - TZ=Asia/Shanghai
       - PYTHONPATH=/app/src
-    command: ["uvicorn", "vid2cat.app:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    command: ["uvicorn", "vid2cat.app:app", "--host", "0.0.0.0", "--port", "8080", "--reload"]
     volumes:
       - ./data:/app/data
