@@ -722,6 +722,7 @@ def build_initial_adoption_prompt(username: str, breed: str, color: str) -> str:
         f"适合名字叫“{username}的小猫”的初始领养形象。"
         "大眼睛，柔软毛发，半身或全身立绘，表情亲人，眼神机灵，"
         "带一点“喵喵系”陪伴感，画面干净，适合宠物养成卡片展示，高质量数字插画。"
+        "画面里不要出现任何文字、字母、数字、logo、水印、对白框或标题。"
     )
 
 
@@ -854,6 +855,7 @@ def build_growth_image_profile(cat: dict[str, Any], feed_result: dict[str, Any])
         f"本次视频总结：{video_summary}。"
         f"外观要求：{appearance}"
         "画面精致干净，适合宠物养成卡片展示，突出成长后的新状态。"
+        "不要在画面中加入任何文字、字母、数字、logo、水印、对白框、路牌或标题。"
     )
     return {
         "name": str(cat.get("name") or "未命名猫咪"),

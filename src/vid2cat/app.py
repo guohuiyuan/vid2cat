@@ -322,6 +322,31 @@ def build_share_card_payload(cat: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_feed_growth_summary(event_data: dict[str, Any]) -> str:
+    delta_labels = [
+        ("智慧", int(event_data.get("wisdom_delta") or 0)),
+        ("毅力", int(event_data.get("grit_delta") or 0)),
+        ("创造", int(event_data.get("creativity_delta") or 0)),
+        ("灵敏", int(event_data.get("agility_delta") or 0)),
+        ("协作", int(event_data.get("cooperation_delta") or 0)),
+    ]
+    delta_parts = [f"{label} +{value}" for label, value in delta_labels if value > 0]
+    growth_text = f"属性增长：{'，'.join(delta_parts)}" if delta_parts else "属性增长：本次没有可见变化"
+
+    learned_skill_raw = str(event_data.get("learned_skill") or "").strip()
+    if not learned_skill_raw:
+        return growth_text
+    try:
+        skill_data = json.loads(learned_skill_raw)
+        skill_name = str(skill_data.get("name") or learned_skill_raw).strip()
+        skill_rarity = str(skill_data.get("rarity") or "").strip().upper()
+    except Exception:
+        skill_name = learned_skill_raw
+        skill_rarity = ""
+    skill_text = f"新技能：{skill_rarity}「{skill_name}」" if skill_rarity else f"新技能：「{skill_name}」"
+    return f"{skill_text} | {growth_text}"
+
+
 def ensure_share_card_access(cat: dict[str, Any], current_user: dict[str, Any] | None) -> tuple[bool, str]:
     is_owner = current_user and int(cat.get("user_id") or 0) == int(current_user["id"])
     is_public = bool(int(cat.get("is_public") or 0) or int(cat.get("available_for_adoption") or 0))
@@ -693,8 +718,8 @@ def my_cat_page(
         })
     for ev in timeline_events:
         content = f"[{ev['title']}] {ev['summary']}"
-        if ev['event_type'] == 'feed' and ev['data'].get('learned_skill'):
-            content += f" | 新技能：{ev['data']['learned_skill']}"
+        if ev["event_type"] == "feed":
+            content += f" | {build_feed_growth_summary(ev['data'])}"
         merged_chat.append({
             "type": "event",
             "role": "system",

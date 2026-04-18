@@ -53,8 +53,8 @@
                             <button type="submit" class="ghost-btn">切换到这只</button>
                         </form>
                         {% endif %}
-                        <a class="ghost-btn" href="/cats/{{ owned.id }}/share-card.png" target="_blank" rel="noopener noreferrer">预览分享卡</a>
-                        <button type="button" class="ghost-btn share-card-btn" data-share-card-id="{{ owned.id }}" data-share-card-name="{{ owned.cat_name }}">分享分享卡</button>
+                        <a class="ghost-btn" href="/cats/{{ owned.id }}/share-card.png" target="_blank" rel="noopener noreferrer">预览卡</a>
+                        <button type="button" class="ghost-btn share-card-btn" data-share-card-id="{{ owned.id }}" data-share-card-name="{{ owned.cat_name }}">分享卡</button>
                     </div>
                 </article>
                 {% endfor %}
