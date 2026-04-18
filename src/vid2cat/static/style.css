@@ -72,6 +72,10 @@ input, textarea, button, select {
     padding: 28px 0 64px;
 }
 
+.page-shell.narrow-shell {
+    width: min(680px, calc(100% - 24px));
+}
+
 /* =========================================================
    基础卡片与容器 (绘本风：圆角 + 粗边框)
 ========================================================= */
@@ -608,8 +612,8 @@ select:focus, input:focus { border-color: var(--primary); }
 .auth-dialog {
     position: relative;
     z-index: 1;
-    width: min(640px, 100%);
-    max-height: min(88vh, 760px);
+    width: min(540px, 100%);
+    max-height: min(84vh, 700px);
     overflow-y: auto;
     border-radius: 28px;
 }

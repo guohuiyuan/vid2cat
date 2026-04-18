@@ -1503,7 +1503,6 @@ def admin_login_page(
             "message": message,
             "error": error,
             "default_admin_username": DEFAULT_ADMIN_USERNAME,
-            "default_admin_password": DEFAULT_ADMIN_PASSWORD,
         },
     )
 
