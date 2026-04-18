@@ -690,7 +690,7 @@ def build_feed_deltas(title: str, analysis: dict[str, Any], tags: list[str]) -> 
     }
 
 
-def build_feed_skill(title: str, tags: list[str]) -> str:
+def build_feed_skill(title: str, tags: list[str], score: int = 70) -> dict[str, str]:
     seed_text = ""
     for item in tags:
         cleaned = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", str(item))
@@ -701,7 +701,17 @@ def build_feed_skill(title: str, tags: list[str]) -> str:
         compact_title = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", title or "")
         seed_text = (compact_title[:4] or "视频")
     suffix = SKILL_SUFFIXES[sum(ord(ch) for ch in seed_text) % len(SKILL_SUFFIXES)]
-    return f"{seed_text}{suffix}"
+    name = f"{seed_text}{suffix}"
+    
+    rarity = "N"
+    if score >= 90:
+        rarity = "SSR"
+    elif score >= 80:
+        rarity = "SR"
+    elif score >= 70:
+        rarity = "R"
+        
+    return {"name": name, "rarity": rarity}
 
 
 def build_initial_adoption_prompt(username: str, breed: str, color: str) -> str:
@@ -916,7 +926,8 @@ def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> di
         description = f"解析时出现异常：{exc}"
 
     deltas = build_feed_deltas(title, structured, tags)
-    learned_skill = build_feed_skill(title, tags)
+    total_score = int(structured.get("total_score", 70) or 70)
+    learned_skill = build_feed_skill(title, tags, total_score)
     summary = str(structured.get("full_summary") or description or title).strip()
     return {
         "source_url": source_url,
@@ -927,7 +938,7 @@ def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> di
         "video_cover_url": cover_url,
         "video_summary": summary,
         "tag_summary": "、".join(tags[:6]) or "抖音成长事件",
-        "learned_skill": learned_skill,
+        "learned_skill": json.dumps(learned_skill, ensure_ascii=False),
         "model1_output": json.dumps(structured, ensure_ascii=False),
         **deltas,
     }

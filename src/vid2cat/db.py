@@ -36,34 +36,16 @@ MAX_CAT_LEVEL = 6
 DEFAULT_EXP_TO_NEXT = 100
 DAILY_TRAINING_ACTIONS: dict[str, dict[str, Any]] = {
     "sunbath": {
-        "label": "日常晒太阳",
+        "label": "晒太阳",
         "exp_gain": 18,
-        "description": "猫族经典，晒太阳时喵力自然恢复。",
-        "summary": "晒了一会儿太阳，毛茸茸的身体慢慢暖起来了，喵力也在静静回升。",
-    },
-    "hunt": {
-        "label": "捕猎修炼",
-        "exp_gain": 24,
-        "description": "追逐和捕猎动作提升喵力。",
-        "summary": "完成了一轮追逐和扑击练习，反应和爆发力都更稳了。",
+        "description": "猫族经典，晒太阳时状态自然恢复。",
+        "summary": "晒了一会儿太阳，毛茸茸的身体慢慢暖起来了，状态也在静静回升。",
     },
     "groom": {
-        "label": "舔毛冥想",
+        "label": "冥想",
         "exp_gain": 30,
-        "description": "舔毛动作是喵师最高效的冥想方式。",
+        "description": "舔毛动作是最高效的冥想方式。",
         "summary": "通过舔毛和整理呼吸进入冥想状态，心绪沉静下来，经验涨得很快。",
-    },
-    "knead": {
-        "label": "踩奶仪式",
-        "exp_gain": 26,
-        "description": "幼年喵师突破瓶颈时的重要仪式。",
-        "summary": "认真完成了一次踩奶仪式，像是在为下一次突破提前蓄力。",
-    },
-    "purr": {
-        "label": "呼噜共鸣",
-        "exp_gain": 22,
-        "description": "集体修炼时通过呼噜声形成共振，来增长经验。",
-        "summary": "呼噜声和同伴的节奏慢慢共振，经验在安静的共鸣里一点点积累。",
     },
 }
 
@@ -247,6 +229,19 @@ def init_db() -> None:
                 cat_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(cat_id) REFERENCES cats(id)
+            );
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS cat_training_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cat_id INTEGER NOT NULL,
+                action_key TEXT NOT NULL,
+                exp_gain INTEGER NOT NULL,
+                summary TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(cat_id) REFERENCES cats(id)
             );
@@ -745,7 +740,7 @@ def compute_exp_to_next(level: int) -> int:
     return DEFAULT_EXP_TO_NEXT
 
 
-def parse_skill_list(raw: str) -> list[str]:
+def parse_skill_list(raw: str) -> list[dict[str, str]]:
     if not raw.strip():
         return []
     try:
@@ -754,16 +749,22 @@ def parse_skill_list(raw: str) -> list[str]:
         return []
     if not isinstance(data, list):
         return []
-    cleaned: list[str] = []
+    cleaned: list[dict[str, str]] = []
     for item in data:
-        text = str(item).strip()
-        if text and text not in cleaned:
-            cleaned.append(text)
+        if isinstance(item, dict) and "name" in item:
+            cleaned.append({"name": str(item["name"]), "rarity": str(item.get("rarity", "N"))})
+        elif isinstance(item, str) and item.strip():
+            cleaned.append({"name": item.strip(), "rarity": "N"})
     return cleaned
 
 
-def dump_skill_list(skills: list[str]) -> str:
-    cleaned = [str(skill).strip() for skill in skills if str(skill).strip()]
+def dump_skill_list(skills: list[dict[str, str]]) -> str:
+    cleaned = []
+    for skill in skills:
+        if isinstance(skill, dict) and "name" in skill and str(skill["name"]).strip():
+            cleaned.append({"name": str(skill["name"]).strip(), "rarity": str(skill.get("rarity", "N"))})
+        elif isinstance(skill, str) and str(skill).strip():
+            cleaned.append({"name": str(skill).strip(), "rarity": "N"})
     return json.dumps(cleaned, ensure_ascii=False)
 
 
@@ -955,19 +956,56 @@ def ensure_user_cat(user_id: int, username: str, settings: dict[str, str] | None
     return create_initial_cat_for_user(user_id, username, ai_data)
 
 
-def list_cat_feed_records(cat_id: int, limit: int = 20) -> list[dict[str, Any]]:
+def list_cat_feed_records(cat_id: int, limit: int = 10) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
             """
             SELECT *
             FROM cat_feed_records
             WHERE cat_id = ?
-            ORDER BY feed_index DESC, created_at DESC
+            ORDER BY created_at DESC
             LIMIT ?
             """,
             (cat_id, limit),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def list_cat_timeline(cat_id: int, limit: int = 20) -> list[dict[str, Any]]:
+    feeds = list_cat_feed_records(cat_id, limit)
+    with get_connection() as conn:
+        train_rows = conn.execute(
+            """
+            SELECT *
+            FROM cat_training_records
+            WHERE cat_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (cat_id, limit),
+        ).fetchall()
+    trains = [dict(row) for row in train_rows]
+
+    timeline = []
+    for f in feeds:
+        timeline.append({
+            "event_type": "feed",
+            "time": f["created_at"],
+            "title": f"视频投喂：{f.get('video_title', '未命名')}",
+            "summary": f.get("video_summary", ""),
+            "data": dict(f)
+        })
+    for t in trains:
+        timeline.append({
+            "event_type": "train",
+            "time": t["created_at"],
+            "title": f"日常修炼：{t.get('action_key', '')}",
+            "summary": t.get("summary", ""),
+            "data": dict(t)
+        })
+
+    timeline.sort(key=lambda x: x["time"], reverse=True)
+    return timeline[:limit]
 
 
 def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_name: str = "") -> dict[str, Any]:
@@ -1004,9 +1042,21 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_
             updated_stats["cooperation"],
         )
         learned_skills = parse_skill_list(str(cat.get("learned_skills_json") or ""))
-        learned_skill = str(feed_result.get("learned_skill") or "").strip()
-        if learned_skill and learned_skill not in learned_skills:
-            learned_skills.append(learned_skill)
+        learned_skill_raw = str(feed_result.get("learned_skill") or "").strip()
+        learned_skill_obj = None
+        learned_skill_name = ""
+        if learned_skill_raw:
+            try:
+                learned_skill_obj = json.loads(learned_skill_raw)
+                learned_skill_name = learned_skill_obj.get("name", "")
+            except Exception:
+                learned_skill_obj = {"name": learned_skill_raw, "rarity": "N"}
+                learned_skill_name = learned_skill_raw
+                
+        if learned_skill_obj and learned_skill_name:
+            if not any(s.get("name") == learned_skill_name for s in learned_skills):
+                learned_skills.append(learned_skill_obj)
+                
         next_level = min(MAX_CAT_LEVEL, current_level + 1)
         next_exp = 0
         next_exp_to_next = compute_exp_to_next(next_level)
@@ -1023,8 +1073,8 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_
             highest_level_owner_name = owner_name
         stage = build_cat_stage(next_level, next_feed_count, max_feeds, int(cat.get("available_for_adoption") or 0))
         latest_summary = str(feed_result.get("video_summary") or "").strip() or "这次喂养让它完成了一次新的突破。"
-        if learned_skill:
-            latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级，并学会技能「{learned_skill}」。"
+        if learned_skill_name:
+            latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级，并学会技能「{learned_skill_name}」。"
         else:
             latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级。"
 
@@ -1054,7 +1104,7 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_
                 int(feed_result.get("creativity_delta") or 0),
                 int(feed_result.get("agility_delta") or 0),
                 int(feed_result.get("cooperation_delta") or 0),
-                str(feed_result.get("learned_skill") or ""),
+                learned_skill_raw,
                 str(feed_result.get("model1_output") or ""),
                 now,
             ),
@@ -1125,6 +1175,15 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
         latest_summary = f"{action['label']}完成，获得 {int(action['exp_gain'])} 点经验。{action['summary']}"
         if new_exp >= exp_to_next:
             latest_summary += f" 当前经验已满，可以喂第 {int(cat.get('feed_count') or 0) + 1} 个视频了。"
+        
+        conn.execute(
+            """
+            INSERT INTO cat_training_records (cat_id, action_key, exp_gain, summary, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (cat_id, action["label"], int(action["exp_gain"]), latest_summary, now),
+        )
+        
         conn.execute(
             """
             UPDATE cats

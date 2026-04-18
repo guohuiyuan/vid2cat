@@ -9,4 +9,3 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - ./data:/app/data
-      - ./.env:/app/.env:ro

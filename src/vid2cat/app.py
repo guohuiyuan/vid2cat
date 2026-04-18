@@ -41,6 +41,7 @@ from .db import (
     get_user_rating,
     init_db,
     list_cat_feed_records,
+    list_cat_timeline,
     list_cat_messages,
     list_public_cats,
     list_atlases,
@@ -235,8 +236,18 @@ def build_feed_record_cards(records: list[dict[str, Any]]) -> list[dict[str, Any
     return cards
 
 
-def build_skill_badges(cat: dict[str, Any]) -> list[str]:
-    return parse_skill_list(str(cat.get("learned_skills_json") or ""))
+def build_skill_badges(cat: dict[str, Any] | None) -> list[dict[str, str]]:
+    if not cat:
+        return []
+    skills = parse_skill_list(str(cat.get("learned_skills_json") or ""))
+    badges = []
+    for skill in skills:
+        badges.append({
+            "name": skill.get("name", ""),
+            "rarity": skill.get("rarity", "N"),
+            "class": f"rarity-{skill.get('rarity', 'N')}"
+        })
+    return badges
 
 
 def build_exp_progress(cat: dict[str, Any]) -> dict[str, int]:
@@ -604,8 +615,30 @@ def my_cat_page(
     owned_count = count_user_owned_cats(int(current_user["id"]))
     cat = get_or_activate_user_cat(int(current_user["id"]))
     owned_cats = [build_cat_card(row) for row in list_user_cats(int(current_user["id"]), limit=3)]
-    feed_records = build_feed_record_cards(list_cat_feed_records(int(cat["id"]), limit=12)) if cat else []
-    chat_history = list_cat_messages(int(cat["id"]), limit=10) if cat else []
+    timeline_events = list_cat_timeline(int(cat["id"]), limit=15) if cat else []
+    chat_history_only = list_cat_messages(int(cat["id"]), limit=15) if cat else []
+    
+    merged_chat = []
+    for msg in chat_history_only:
+        merged_chat.append({
+            "type": "chat",
+            "role": msg["role"],
+            "content": msg["content"],
+            "created_at": msg["created_at"]
+        })
+    for ev in timeline_events:
+        content = f"[{ev['title']}] {ev['summary']}"
+        if ev['event_type'] == 'feed' and ev['data'].get('learned_skill'):
+            content += f" | 新技能：{ev['data']['learned_skill']}"
+        merged_chat.append({
+            "type": "event",
+            "role": "system",
+            "content": content,
+            "created_at": ev["time"],
+            "event_type": ev["event_type"]
+        })
+    merged_chat.sort(key=lambda x: x["created_at"])
+    
     adoption_context = build_adoption_context(owned_count)
     exp_progress = build_exp_progress(cat) if cat else {"level": 0, "exp": 0, "exp_to_next": 0, "percent": 0, "remaining": 0}
     skill_badges = build_skill_badges(cat) if cat else []
@@ -616,6 +649,7 @@ def my_cat_page(
     )
     if cat and int(cat.get("feed_count") or 0) > 0:
         request.session.pop("show_growth_guide", None)
+
     return templates.TemplateResponse(
         request=request,
         name="my_cat.html",
@@ -629,8 +663,8 @@ def my_cat_page(
             "owned_cats": owned_cats,
             "owned_count": owned_count,
             "stat_cards": build_cat_stat_cards(cat) if cat else [],
-            "feed_records": feed_records,
-            "chat_history": chat_history,
+            "timeline_events": timeline_events,
+            "chat_history": merged_chat,
             "stage_hint": build_cat_stage_hint(cat) if cat else "先完成首次领养，再开始喂养和聊天。",
             "remaining_feeds": max(0, int(cat.get("max_feed_count") or MAX_CAT_LEVEL) - int(cat.get("feed_count") or 0)) if cat else 0,
             "can_feed": bool(cat) and can_feed,

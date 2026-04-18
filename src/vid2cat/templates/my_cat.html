@@ -1,31 +1,15 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="referrer" content="no-referrer">
-    <title>我的猫 - vid2cat</title>
-    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
-</head>
-<body>
-    <div class="page-shell">
-        <div class="top-nav plain-nav">
-            <a class="brand" href="/my-cat">vid2cat</a>
-            <div class="nav-actions">
-                <a class="ghost-btn active-tab" href="/my-cat">我的猫</a>
-                <a class="ghost-btn" href="/plaza">猫咪市场</a>
-                <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
-                <span class="user-badge">已登录：{{ current_user.username }}</span>
-                <a class="ghost-btn" href="/logout">退出</a>
-            </div>
-        </div>
+{% extends "index.html" %}
 
-        {% if message %}
-        <div class="notice success">{{ message }}</div>
-        {% endif %}
-        {% if error %}
-        <div class="notice error">{{ error }}</div>
-        {% endif %}
+{% block title %}我的猫 - vid2cat{% endblock %}
+
+{% block content %}
+<div class="page-shell">
+    {% if message %}
+    <div class="notice success">{{ message }}</div>
+    {% endif %}
+    {% if error %}
+    <div class="notice error">{{ error }}</div>
+    {% endif %}
 
         <section class="content-card">
             <div class="section-title-row">
@@ -213,8 +197,11 @@
                                 </div>
                                 {% if skill_badges %}
                                 <div class="pill-row compact">
-                                    {% for skill in skill_badges %}
-                                    <span class="pill active">{{ skill }}</span>
+                                    {% for badge in skill_badges %}
+                                    <span class="skill-badge {{ badge.class }}">
+                                        <span class="skill-rarity">{{ badge.rarity }}</span>
+                                        {{ badge.name }}
+                                    </span>
                                     {% endfor %}
                                 </div>
                                 {% else %}
@@ -232,28 +219,6 @@
                             <div class="latest-summary">
                                 <h3>最近一次变化</h3>
                                 <p>{{ cat.latest_summary or "还没有新的成长记录。" }}</p>
-                            </div>
-                        </div>
-
-                        <div class="info-panel">
-                            <div class="section-title-row compact-row">
-                                <div>
-                                    <h3>日常修炼</h3>
-                                    <span class="section-hint">先靠这些修炼把经验条练满，经验满了才能继续喂视频升级</span>
-                                </div>
-                            </div>
-                            <div class="training-grid">
-                                {% for action in training_actions %}
-                                <form action="/my-cat/train" method="POST" class="training-card">
-                                    <input type="hidden" name="action_key" value="{{ action.key }}">
-                                    <div class="training-card-body">
-                                        <strong>{{ action.label }}</strong>
-                                        <p>{{ action.description }}</p>
-                                        <span class="pill muted">经验 +{{ action.exp_gain }}</span>
-                                    </div>
-                                    <button type="submit" class="ghost-btn full-width">开始修炼</button>
-                                </form>
-                                {% endfor %}
                             </div>
                         </div>
 
@@ -284,8 +249,15 @@
                             </div>
                             {% else %}
                             {% for msg in chat_history %}
-                            <div class="message {{ msg.role }}">
+                            <div class="message {{ msg.role }} {% if msg.type == 'event' %}timeline-event-msg{% endif %}">
+                                {% if msg.type == 'event' %}
+                                <div class="message-content timeline-style">
+                                    <span class="event-icon">{% if msg.event_type == 'feed' %}🌟{% else %}🌿{% endif %}</span>
+                                    {{ msg.content }}
+                                </div>
+                                {% else %}
                                 <div class="message-content">{{ msg.content }}</div>
+                                {% endif %}
                             </div>
                             {% endfor %}
                             {% endif %}
@@ -298,6 +270,7 @@
                             data-chat-endpoint="/api/my-cat/chat/stream"
                             data-feed-endpoint="/api/my-cat/feed"
                         >
+                            <input type="hidden" name="cat_id" value="{{ cat.id }}">
                             <textarea
                                 id="interaction-input"
                                 name="content"
@@ -308,6 +281,21 @@
                                 required
                             ></textarea>
                             <div class="interaction-footer">
+                                <div class="quick-training-row">
+                                    {% for action in training_actions %}
+                                    <button
+                                        type="submit"
+                                        class="ghost-btn compact-btn"
+                                        formaction="/my-cat/train"
+                                        formmethod="post"
+                                        name="action_key"
+                                        value="{{ action.key }}"
+                                        title="{{ action.description }} (经验 +{{ action.exp_gain }})"
+                                    >
+                                        {{ action.label }}
+                                    </button>
+                                    {% endfor %}
+                                </div>
                                 <span id="interaction-hint" class="section-hint">
                                     {{ feed_gate_hint }}
                                 </span>
@@ -358,47 +346,6 @@
         </section>
         {% endif %}
 
-        {% if cat %}
-        <section class="content-card">
-            <div class="section-title-row">
-                <h2>成长记录</h2>
-                <span class="section-hint">展示每次喂养的视频摘要和属性变化</span>
-            </div>
-            {% if feed_records %}
-            <div class="feed-record-list">
-                {% for record in feed_records %}
-                <article class="feed-record-card">
-                    <div class="comment-header">
-                        <strong>第 {{ record.feed_index }} 次喂养：{{ record.video_title }}</strong>
-                        <span>{{ record.created_at.replace('T', ' ')[:19] }}</span>
-                    </div>
-                    <div class="pill-row compact">
-                        <span class="pill muted">作者：{{ record.video_author or "未知作者" }}</span>
-                        <span class="pill muted">标签：{{ record.tag_summary or "成长事件" }}</span>
-                        {% if record.learned_skill %}
-                        <span class="pill active">学会技能：{{ record.learned_skill }}</span>
-                        {% endif %}
-                    </div>
-                    <p>{{ record.video_summary }}</p>
-                    {% if record.delta_items %}
-                    <div class="delta-row">
-                        {% for delta in record.delta_items %}
-                        <span class="delta-pill{% if delta.positive %} positive{% else %} negative{% endif %}">
-                            {{ delta.label }} {{ delta.display }}
-                        </span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </article>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="empty-state compact">
-                还没有成长记录，先在上面的统一对话框里贴一条抖音链接。
-            </div>
-            {% endif %}
-        </section>
-        {% endif %}
     </div>
 
     <div id="parse-loading" class="loading-overlay hidden" aria-hidden="true">
@@ -408,7 +355,5 @@
             <p>系统正在解析抖音内容并更新猫咪形象，请稍候。</p>
         </div>
     </div>
-
     <script src="{{ request.url_for('static', path='app.js') }}"></script>
-</body>
-</html>
+{% endblock %}
