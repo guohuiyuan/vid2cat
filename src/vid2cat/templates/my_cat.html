@@ -18,7 +18,7 @@
                     <span class="section-hint">最多拥有 3 只，当前 {{ owned_count }}/3，点击卡片即可切换当前陪伴中的猫咪</span>
                 </div>
                 {% if can_adopt_new %}
-                <a class="ghost-btn anchor-btn" href="#adoption-panel">{{ "完成首次领养" if needs_initial_adoption else "再领养一只" }}</a>
+                <a class="ghost-btn anchor-btn" href="/my-cat#adoption-panel">{{ "完成首次领养" if needs_initial_adoption else "再领养一只" }}</a>
                 {% endif %}
             </div>
 
