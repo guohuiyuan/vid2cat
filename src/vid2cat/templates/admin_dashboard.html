@@ -7,16 +7,27 @@
     <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
 </head>
 <body>
-    <div class="page-shell">
-        <div class="top-nav plain-nav">
-            <a class="brand" href="/">vid2cat</a>
-            <div class="nav-actions">
-                <a class="ghost-btn" href="/">前台</a>
-                <a class="ghost-btn" href="/admin/password">修改密码</a>
-                <a class="ghost-btn" href="/admin/logout">退出后台</a>
-            </div>
+    <header class="site-header">
+        <div class="header-container">
+            <a href="/" class="site-logo">vid2cat</a>
+            <nav class="nav-links">
+                <a href="/">前台</a>
+                <a href="/my-cat">我的猫</a>
+                <a href="/plaza">猫咪市场</a>
+                <div class="user-dropdown">
+                    <button class="user-dropdown-btn">
+                        {{ admin.username }}
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+                    </button>
+                    <div class="user-dropdown-menu">
+                        <a href="/admin/password">修改密码</a>
+                        <a href="/admin/logout">退出后台</a>
+                    </div>
+                </div>
+            </nav>
         </div>
-
+    </header>
+    <div class="page-shell">
         {% if message %}
         <div class="notice success">{{ message }}</div>
         {% endif %}

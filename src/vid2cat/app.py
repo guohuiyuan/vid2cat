@@ -63,10 +63,10 @@ from .db import (
 )
 from .integrations import ImageHostScaffold
 from .services import (
+    build_growth_image_profile,
     extract_first_url,
     generate_cat_response,
     generate_cat_image_with_model3,
-    generate_final_cat_persona,
     generate_initial_cat_ai_data,
     is_douyin_url,
     parse_cat_profile,
@@ -356,33 +356,14 @@ async def run_feed_task(
         updated_cat = await asyncio.to_thread(add_cat_feed_record, int(cat["id"]), feed_result, current_owner_name)
 
         feed_count = int(updated_cat.get("feed_count") or 0)
-        update_async_task(task_id, message=f"第 {feed_count} 次喂养完成，正在生成新形象")
-        records = await asyncio.to_thread(list_cat_feed_records, int(updated_cat["id"]), feed_count)
-        summaries = [row["video_summary"] for row in records]
-        stats = {
-            "wisdom": updated_cat["wisdom"],
-            "grit": updated_cat["grit"],
-            "creativity": updated_cat["creativity"],
-            "agility": updated_cat["agility"],
-            "cooperation": updated_cat["cooperation"],
-        }
-        persona_result = await asyncio.wait_for(
-            asyncio.to_thread(
-                generate_final_cat_persona,
-                settings,
-                updated_cat["name"],
-                summaries,
-                stats,
-            ),
-            timeout=45,
-        )
-        profile = persona_result["profile"]
+        update_async_task(task_id, message=f"第 {feed_count} 次喂养完成，正在按当前设定生成新形象")
+        profile = await asyncio.to_thread(build_growth_image_profile, updated_cat, feed_result)
         image_result = await asyncio.wait_for(
             asyncio.to_thread(
                 generate_cat_image_with_model3,
                 settings,
                 updated_cat["name"],
-                profile["story"],
+                str(feed_result.get("video_summary") or profile["story"]),
                 profile,
             ),
             timeout=60,
@@ -390,7 +371,7 @@ async def run_feed_task(
         await asyncio.to_thread(
             update_cat_final_persona,
             int(updated_cat["id"]),
-            persona_result["raw"],
+            json.dumps(profile, ensure_ascii=False),
             image_result["url"],
             profile["personality"],
             profile["story"],

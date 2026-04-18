@@ -824,6 +824,50 @@ def generate_final_cat_persona(
     return {"profile": profile, "raw": raw}
 
 
+def build_growth_image_profile(cat: dict[str, Any], feed_result: dict[str, Any]) -> dict[str, str]:
+    learned_skill_raw = str(feed_result.get("learned_skill") or "").strip()
+    learned_skill_name = "内容拟态"
+    learned_skill_rarity = "R"
+    if learned_skill_raw:
+        try:
+            skill_data = json.loads(learned_skill_raw)
+            learned_skill_name = str(skill_data.get("name") or learned_skill_name)
+            learned_skill_rarity = str(skill_data.get("rarity") or learned_skill_rarity)
+        except Exception:
+            learned_skill_name = learned_skill_raw
+
+    level = int(cat.get("level") or 0)
+    personality = str(cat.get("personality") or "亲人、聪明，带一点小傲娇。")
+    current_story = str(cat.get("story_summary") or "它正在一点点长成更懂主人的猫。")
+    video_summary = str(feed_result.get("video_summary") or "吸收了一次新的成长能量。")
+    video_title = str(feed_result.get("video_title") or "未命名视频")
+    appearance = (
+        f"二次元成长系猫咪，等级 {level}，神情灵动，毛发细腻，"
+        f"表现出刚学会技能「{learned_skill_name}」后的新变化。"
+    )
+    story = f"{current_story} 这次它从《{video_title}》里吸收了新的内容，总结为：{video_summary}"
+    image_prompt = (
+        f"一只二次元成长系猫咪插画，名字叫{cat.get('name') or '未命名猫咪'}。"
+        f"当前等级 {level}，刚学会技能「{learned_skill_name}」，技能稀有度为 {learned_skill_rarity}。"
+        f"性格是：{personality}。"
+        f"当前成长摘要：{current_story}。"
+        f"本次视频总结：{video_summary}。"
+        f"外观要求：{appearance}"
+        "画面精致干净，适合宠物养成卡片展示，突出成长后的新状态。"
+    )
+    return {
+        "name": str(cat.get("name") or "未命名猫咪"),
+        "breed": "成长系动漫猫",
+        "skill": learned_skill_name,
+        "power": str(cat.get("overall_power") or "100"),
+        "personality": personality,
+        "story": story,
+        "appearance": appearance,
+        "rarity": learned_skill_rarity,
+        "image_prompt": image_prompt,
+    }
+
+
 def generate_cat_response(
     settings: dict[str, str],
     cat: dict[str, Any],
