@@ -11,11 +11,11 @@
         <div class="top-nav plain-nav">
             <a class="brand" href="/">vid2cat</a>
             <div class="nav-actions">
-                <a class="ghost-btn" href="/">抖音解析</a>
-                <a class="ghost-btn" href="/atlases">图鉴列表</a>
+                <a class="ghost-btn" href="/">首页</a>
                 <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
                 {% if current_user %}
                 <span class="user-badge">已登录：{{ current_user.username }}</span>
+                <a class="ghost-btn" href="/my-cat">我的猫</a>
                 <a class="ghost-btn" href="/logout">退出</a>
                 {% else %}
                 <a class="ghost-btn" href="/login">登录</a>
@@ -33,7 +33,7 @@
         <section class="content-card">
             <div class="section-title-row">
                 <h1>注册账号</h1>
-                <span class="section-hint">注册后会自动登录，随后就可以在图鉴详情页评论</span>
+                <span class="section-hint">注册后会自动登录，并立即领取一只初始动漫猫</span>
             </div>
             <form class="stack-form" action="/register" method="post">
                 <input type="text" name="username" placeholder="用户名" required>
@@ -41,6 +41,9 @@
                 <input type="password" name="password" placeholder="密码" required>
                 <button class="primary-btn full-width" type="submit">立即注册</button>
             </form>
+            <div class="empty-state compact">
+                注册成功后你会直接进入“我的猫”页面，可以马上喂第 1 条抖音链接。
+            </div>
             <div class="form-footer-hint">
                 <span class="section-hint">已有账号？</span>
                 <a class="ghost-btn" href="/login">去登录</a>

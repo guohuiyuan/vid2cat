@@ -637,3 +637,223 @@ def parse_model1_analysis(raw: str) -> dict[str, Any]:
             "author": str((data.get("perspectives") or {}).get("author") or "").strip(),
         },
     }
+
+
+def score_to_delta(score: int) -> int:
+    if score >= 90:
+        return 3
+    if score >= 80:
+        return 2
+    if score >= 68:
+        return 1
+    if score >= 58:
+        return 0
+    return -1
+
+
+def build_feed_deltas(title: str, analysis: dict[str, Any], tags: list[str]) -> dict[str, int]:
+    novelty_seed = 60 + (sum(ord(ch) for ch in title) + len(tags) * 7) % 35
+    grit_seed = round((analysis.get("total_score", 70) + analysis.get("resonance_score", 70)) / 2)
+    return {
+        "wisdom_delta": score_to_delta(int(analysis.get("knowledge_score", 70) or 70)),
+        "grit_delta": score_to_delta(int(grit_seed or 70)),
+        "creativity_delta": score_to_delta(int(novelty_seed)),
+        "agility_delta": score_to_delta(int(analysis.get("rhythm_score", 70) or 70)),
+        "cooperation_delta": score_to_delta(int(analysis.get("resonance_score", 70) or 70)),
+    }
+
+
+def generate_initial_cat_ai_data(
+    settings: dict[str, str],
+    username: str,
+) -> dict[str, Any]:
+    config2 = build_model_config(settings, 2)
+    system_prompt2 = (
+        "你是猫咪图鉴设定师。请为一个新领养的动漫猫生成初始人设。"
+        "只返回 JSON，不要输出额外说明。"
+    )
+    user_prompt2 = (
+        f"主人名字是 {username}。请生成猫咪的初始设定。\n"
+        "请返回 JSON，字段必须包含："
+        "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
+    )
+    raw2 = AIModelRuntime.complete_text(config2, system_prompt2, user_prompt2, temperature=0.9)
+    data2 = json_repair.loads(raw2)
+    profile = {
+        "name": str(data2.get("name") or f"{username}的小猫"),
+        "breed": str(data2.get("breed") or "初始动漫猫"),
+        "skill": str(data2.get("skill") or "卖萌"),
+        "power": str(data2.get("power") or "50"),
+        "personality": str(data2.get("personality") or "活泼可爱，充满好奇心。"),
+        "story": str(data2.get("story") or f"这是 {username} 领养的第一只动漫猫。"),
+        "appearance": str(data2.get("appearance") or "可爱的二次元小猫，大眼睛，毛茸茸。"),
+        "rarity": str(data2.get("rarity") or "N"),
+        "image_prompt": str(data2.get("image_prompt") or "A cute anime cat, high quality, digital art style."),
+    }
+
+    # 调用模型3生成初始图片
+    image_url = ""
+    try:
+        image_result = generate_cat_image_with_model3(settings, profile["name"], profile["story"], profile)
+        image_url = image_result["url"]
+    except Exception:
+        pass
+
+    return {
+        "profile": profile,
+        "image_url": image_url,
+    }
+
+
+def generate_final_cat_persona(
+    settings: dict[str, str],
+    cat_name: str,
+    summaries: list[str],
+    stats: dict[str, int],
+) -> dict[str, Any]:
+    config = build_model_config(settings, 2)
+    system_prompt = (
+        "你是猫咪图鉴设定师。请根据猫咪成长过程中吸收的视频内容摘要，"
+        "生成它的“进阶/终局”形态设定。猫咪名字叫 " + cat_name + "。"
+        "只返回 JSON，不要输出额外说明。"
+    )
+    user_prompt = (
+        f"这只猫咪的 5 维属性如下：\n"
+        f"智慧: {stats.get('wisdom', 10)}\n"
+        f"毅力: {stats.get('grit', 10)}\n"
+        f"创造: {stats.get('creativity', 10)}\n"
+        f"灵敏: {stats.get('agility', 10)}\n"
+        f"协作: {stats.get('cooperation', 10)}\n\n"
+        f"这只猫咪喂养过程中吸收的内容总结如下：\n"
+        + "\n".join([f"{i+1}. {s}" for i, s in enumerate(summaries)])
+        + "\n\n请返回 JSON，字段必须包含："
+        "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
+    )
+    raw = AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.8)
+    data = json_repair.loads(raw)
+    profile = {
+        "name": str(data.get("name") or cat_name),
+        "breed": str(data.get("breed") or "进阶动漫猫"),
+        "skill": str(data.get("skill") or "内容拟态"),
+        "power": str(data.get("power") or "100"),
+        "personality": str(data.get("personality") or "性格正在变得丰富。"),
+        "story": str(data.get("story") or "在主人的陪伴下不断进化。"),
+        "appearance": str(data.get("appearance") or "更加精致的形象。"),
+        "rarity": str(data.get("rarity") or "SR"),
+        "image_prompt": str(data.get("image_prompt") or ""),
+    }
+    return {"profile": profile, "raw": raw}
+
+
+def generate_cat_response(
+    settings: dict[str, str],
+    cat: dict[str, Any],
+    messages: list[dict[str, str]],
+) -> str:
+    config = build_model_config(settings, 2)
+    system_prompt = (
+        f"你现在是一只动漫猫，你的名字叫 {cat['name']}。"
+        f"你的性格是：{cat['personality']}。"
+        f"你的背景故事是：{cat['story_summary']}。"
+        f"你的当前状态：智慧={cat['wisdom']}, 毅力={cat['grit']}, "
+        f"创造={cat['creativity']}, 灵敏={cat['agility']}, 协作={cat['cooperation']}。"
+        "请以猫咪的口吻和主人聊天。可以适当地卖萌，但要保持你的性格特色。"
+        "回复要简短亲切，不要输出任何 AI 助手的客套话。"
+    )
+    # 限制上下文长度
+    recent_messages = messages[-10:]
+    history = "\n".join([f"{'主人' if m['role'] == 'user' else '猫咪'}: {m['content']}" for m in recent_messages])
+    user_prompt = f"对话记录：\n{history}\n\n主人最后说：{messages[-1]['content']}\n\n请回复主人："
+    return AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.9)
+
+
+def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> dict[str, Any]:
+    source_url = extract_first_url(url) or url.strip()
+    if not is_douyin_url(source_url):
+        raise ValueError("请输入抖音作品链接")
+
+    try:
+        canonical_url = resolve_douyin_url(source_url)
+    except Exception:
+        canonical_url = source_url
+    aweme_id = ""
+    try:
+        aweme_id = extract_aweme_id(canonical_url)
+    except Exception:
+        aweme_id = "pending"
+
+    title = "待解析的抖音内容"
+    author_name = "未知作者"
+    description = ""
+    cover_url = ""
+    tags: list[str] = []
+    structured = build_fallback_model1_analysis(
+        title=title,
+        description=description,
+        tags=tags,
+        hot=75,
+        knowledge=68,
+        rhythm=72,
+        resonance=70,
+    )
+
+    try:
+        router_data, _ = fetch_router_payload(canonical_url, aweme_id)
+        item = deep_get(
+            router_data,
+            ["loaderData", "video_(id)/page", "videoInfoRes", "item_list", 0],
+            None,
+        ) or deep_get(
+            router_data,
+            ["loaderData", "note_(id)/page", "videoInfoRes", "item_list", 0],
+            {},
+        )
+        title = (item.get("desc") or f"抖音内容 {aweme_id}")[:120]
+        author_name = deep_get(item, ["author", "nickname"], "未知作者")
+        description = item.get("desc") or title
+        cover_url = (
+            deep_get(item, ["video", "cover", "url_list", 0], "")
+            or deep_get(item, ["images", 0, "url_list", 0], "")
+        )
+        tags = [tag for tag in re.split(r"[#\s,，/]+", description) if tag][:8]
+        hot, rhythm, knowledge, resonance = score_from_text(title, author_name, aweme_id)
+        structured = build_fallback_model1_analysis(
+            title=title,
+            description=description,
+            tags=tags,
+            hot=hot,
+            knowledge=knowledge,
+            rhythm=rhythm,
+            resonance=resonance,
+        )
+        if settings and settings.get("ai_model_1_model"):
+            try:
+                model_result = generate_video_analysis_with_model1(
+                    settings=settings,
+                    title=title,
+                    description=description,
+                    author_name=author_name,
+                    tags=tags,
+                )
+                structured = model_result["structured"]
+                if model_result["tags"]:
+                    tags = model_result["tags"]
+            except Exception:
+                pass
+    except Exception as exc:
+        description = f"解析时出现异常：{exc}"
+
+    deltas = build_feed_deltas(title, structured, tags)
+    summary = str(structured.get("full_summary") or description or title).strip()
+    return {
+        "source_url": source_url,
+        "canonical_url": canonical_url,
+        "aweme_id": aweme_id,
+        "video_title": title,
+        "video_author": author_name,
+        "video_cover_url": cover_url,
+        "video_summary": summary,
+        "tag_summary": "、".join(tags[:6]) or "抖音成长事件",
+        "model1_output": json.dumps(structured, ensure_ascii=False),
+        **deltas,
+    }

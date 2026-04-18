@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import asyncio
+import json
 from pathlib import Path
+import time
 import tempfile
+from typing import Any
 from urllib.parse import quote
+from uuid import uuid4
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -16,31 +21,52 @@ from .db import (
     DEFAULT_ADMIN_USERNAME,
     DEFAULT_SETTINGS,
     add_comment,
+    add_cat_feed_record,
+    add_cat_message,
     authenticate_admin,
     authenticate_user,
+    ensure_user_cat,
     get_atlas,
+    get_user_cat,
     get_rating_summary,
     get_settings,
     get_user_by_id,
     get_user_rating,
     init_db,
+    list_cat_feed_records,
+    list_cat_messages,
+    list_public_cats,
     list_atlases,
     list_comments,
     list_recent_users,
     register_user,
     save_atlas,
+    set_all_user_cats_inactive,
+    update_cat_final_persona,
+    update_cat_public_status,
     update_settings,
     update_user_password,
     upsert_rating,
     verify_password,
 )
 from .integrations import ImageHostScaffold
-from .services import extract_first_url, is_douyin_url, parse_cat_profile, parse_douyin_to_atlas, parse_model1_analysis
+from .services import (
+    extract_first_url,
+    generate_cat_response,
+    generate_cat_image_with_model3,
+    generate_final_cat_persona,
+    is_douyin_url,
+    parse_cat_profile,
+    parse_douyin_to_atlas,
+    parse_douyin_to_feed,
+    parse_model1_analysis,
+)
 
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parents[1]
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+ASYNC_TASKS: dict[str, dict[str, Any]] = {}
 CAT_PROFILE_LABELS = {
     "name": "猫咪名字",
     "breed": "猫咪品种",
@@ -51,6 +77,13 @@ CAT_PROFILE_LABELS = {
     "appearance": "外貌描述",
     "rarity": "稀有度",
     "image_prompt": "绘图提示词",
+}
+CAT_STAT_LABELS = {
+    "wisdom": "智慧",
+    "grit": "毅力",
+    "creativity": "创造",
+    "agility": "灵敏",
+    "cooperation": "协作",
 }
 
 
@@ -69,6 +102,21 @@ def build_atlas_card(atlas: dict) -> dict:
         "rarity": profile.get("rarity") or "待定",
         "summary": summary,
         "title": atlas.get("title") or "",
+    }
+
+
+def build_cat_card(cat: dict) -> dict:
+    image_url = cat.get("image_url") or ""
+    return {
+        "id": cat.get("id"),
+        "cat_name": cat.get("name") or "未命名猫咪",
+        "username": cat.get("username") or "未知主人",
+        "image_url": image_url,
+        "stage": cat.get("stage") or "初始态",
+        "feed_count": cat.get("feed_count") or 0,
+        "max_feed_count": cat.get("max_feed_count") or 5,
+        "overall_power": cat.get("overall_power") or 50,
+        "summary": cat.get("personality") or cat.get("story_summary") or "暂无介绍",
     }
 
 
@@ -120,6 +168,162 @@ def build_radar_chart(
         "axis_lines": axis_lines,
         "labels": labels,
     }
+
+
+def build_cat_stat_cards(cat: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        {"key": key, "label": label, "value": int(cat.get(key) or 0)}
+        for key, label in CAT_STAT_LABELS.items()
+    ]
+
+
+def build_feed_record_cards(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    cards: list[dict[str, Any]] = []
+    delta_labels = {
+        "wisdom_delta": "智慧",
+        "grit_delta": "毅力",
+        "creativity_delta": "创造",
+        "agility_delta": "灵敏",
+        "cooperation_delta": "协作",
+    }
+    for row in records:
+        delta_items = []
+        for key, label in delta_labels.items():
+            value = int(row.get(key) or 0)
+            if value == 0:
+                continue
+            delta_items.append(
+                {
+                    "label": label,
+                    "display": f"{value:+d}",
+                    "positive": value > 0,
+                }
+            )
+        cards.append(
+            {
+                **row,
+                "delta_items": delta_items,
+            }
+        )
+    return cards
+
+
+def build_cat_stage_hint(cat: dict[str, Any]) -> str:
+    feed_count = int(cat.get("feed_count") or 0)
+    max_feed_count = int(cat.get("max_feed_count") or 10)
+    if feed_count <= 0:
+        return "新领养的小猫，快喂第 1 条让它开始成长。"
+    if feed_count >= max_feed_count:
+        return f"这只猫已经喂满了 {max_feed_count} 次，它已经完全成长了，可以领养下一只了！"
+    if feed_count >= 5:
+        return f"已经喂了 {feed_count} 次，猫咪已完成第一次进化，继续喂到 {max_feed_count} 次达成终极形态。"
+    return f"已经完成 {feed_count}/{max_feed_count} 次喂养，离第 5 次进化还有 {max(0, 5 - feed_count)} 次。"
+
+
+def create_async_task(task_type: str, cat_id: int) -> dict[str, Any]:
+    task_id = uuid4().hex
+    task = {
+        "id": task_id,
+        "type": task_type,
+        "cat_id": cat_id,
+        "status": "pending",
+        "message": "任务排队中",
+        "error": "",
+        "created_at": time.time(),
+        "updated_at": time.time(),
+    }
+    ASYNC_TASKS[task_id] = task
+    return task
+
+
+def update_async_task(task_id: str, **kwargs: Any) -> None:
+    task = ASYNC_TASKS.get(task_id)
+    if not task:
+        return
+    task.update(kwargs)
+    task["updated_at"] = time.time()
+
+
+async def run_feed_task(task_id: str, cat: dict[str, Any], parsed_url: str, settings: dict[str, str]) -> None:
+    update_async_task(task_id, status="running", message="正在分析视频内容")
+    try:
+        feed_result = await asyncio.wait_for(
+            asyncio.to_thread(parse_douyin_to_feed, parsed_url, settings),
+            timeout=45,
+        )
+        update_async_task(task_id, message="正在写入成长记录")
+        updated_cat = await asyncio.to_thread(add_cat_feed_record, int(cat["id"]), feed_result)
+
+        feed_count = int(updated_cat.get("feed_count") or 0)
+        if feed_count in (5, 10):
+            update_async_task(task_id, message=f"第 {feed_count} 次喂养达成，正在生成新形象")
+            records = await asyncio.to_thread(list_cat_feed_records, int(updated_cat["id"]), feed_count)
+            summaries = [row["video_summary"] for row in records]
+            stats = {
+                "wisdom": updated_cat["wisdom"],
+                "grit": updated_cat["grit"],
+                "creativity": updated_cat["creativity"],
+                "agility": updated_cat["agility"],
+                "cooperation": updated_cat["cooperation"],
+            }
+            persona_result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    generate_final_cat_persona,
+                    settings,
+                    updated_cat["name"],
+                    summaries,
+                    stats,
+                ),
+                timeout=45,
+            )
+            profile = persona_result["profile"]
+            image_result = await asyncio.wait_for(
+                asyncio.to_thread(
+                    generate_cat_image_with_model3,
+                    settings,
+                    updated_cat["name"],
+                    profile["story"],
+                    profile,
+                ),
+                timeout=60,
+            )
+            await asyncio.to_thread(
+                update_cat_final_persona,
+                int(updated_cat["id"]),
+                persona_result["raw"],
+                image_result["url"],
+                profile["personality"],
+                profile["story"],
+                "已进化" if feed_count == 5 else "已满级",
+            )
+            update_async_task(
+                task_id,
+                status="done",
+                message=f"第 {feed_count} 次喂养完成，猫咪形象已更新",
+            )
+            return
+
+        update_async_task(
+            task_id,
+            status="done",
+            message=f"第 {updated_cat['feed_count']} 次喂养完成，{updated_cat['name']} 已吸收新的成长能量",
+        )
+    except Exception as exc:
+        update_async_task(task_id, status="error", error=str(exc), message="喂养任务失败")
+
+
+def submit_feed_for_current_user(request: Request, raw_input: str) -> RedirectResponse:
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login", error="请先登录后再给猫喂抖音链接", extra={"next": "/my-cat"})
+    settings = get_settings()
+    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 10):
+        return redirect_with_message("/my-cat", error="这只猫已经喂满了 10 次，无法继续喂食，但可以继续对话。")
+    parsed_url = extract_first_url(raw_input) or raw_input.strip()
+    if not is_douyin_url(parsed_url):
+        return redirect_with_message("/my-cat", error="请输入抖音作品链接")
+    return redirect_with_message("/my-cat", message="任务已提交")
 
 app = FastAPI(title="vid2cat", version="0.1.0")
 app.add_middleware(SessionMiddleware, secret_key="vid2cat-admin-session-secret")
@@ -184,41 +388,30 @@ def require_admin(request: Request, allow_password_change: bool = False) -> tupl
 @app.get("/")
 def home(
     request: Request,
-    text: str = Query(default=""),
     message: str = Query(default=""),
     error: str = Query(default=""),
 ):
+    current_user = get_current_user(request)
     settings = get_settings()
+    my_cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings) if current_user else None
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "request": request,
-            "text": text,
             "message": message,
             "error": error,
-            "extracted_url": extract_first_url(text or ""),
             "admin_user": get_current_admin(request),
-            "current_user": get_current_user(request),
+            "current_user": current_user,
+            "my_cat": my_cat,
             "image_host_status": ImageHostScaffold.describe(settings),
         },
     )
 
 
 @app.post("/parse")
-def parse_url(raw_input: str = Form(...)):
-    parsed_url = extract_first_url(raw_input) or raw_input.strip()
-    if not is_douyin_url(parsed_url):
-        return redirect_with_message("/", error="请输入抖音作品链接")
-    settings = get_settings()
-    atlas = parse_douyin_to_atlas(parsed_url, settings=settings)
-    atlas_id = save_atlas(atlas)
-    message = "已完成基础解析并生成图鉴骨架"
-    if atlas.get("parse_error"):
-        message = "解析未完全成功，已生成可继续开发的图鉴骨架"
-    elif settings.get("ai_model_1_model"):
-        message = f"已完成基础解析，并使用模型1（{settings['ai_model_1_model']}）生成视频摘要"
-    return redirect_with_message(f"/atlas/{atlas_id}", message=message)
+def parse_url(request: Request, raw_input: str = Form(...)):
+    return submit_feed_for_current_user(request, raw_input)
 
 
 @app.get("/atlases")
@@ -277,7 +470,9 @@ def register_submit(
         user = authenticate_user(username, password)
         if user:
             request.session["user_id"] = int(user["id"])
-        return redirect_with_message("/atlases", message="注册成功，已自动登录")
+            settings = get_settings()
+            ensure_user_cat(int(user["id"]), user["username"], settings=settings)
+        return redirect_with_message("/my-cat", message="注册成功，已自动领取一只初始猫")
     return redirect_with_message("/register", error=msg)
 
 
@@ -286,7 +481,7 @@ def login_page(
     request: Request,
     message: str = Query(default=""),
     error: str = Query(default=""),
-    next: str = Query(default="/atlases"),
+    next: str = Query(default="/my-cat"),
 ):
     return templates.TemplateResponse(
         request=request,
@@ -307,19 +502,193 @@ def login_submit(
     request: Request,
     identity: str = Form(...),
     password: str = Form(...),
-    next: str = Form("/atlases"),
+    next: str = Form("/my-cat"),
 ):
     user = authenticate_user(identity, password)
     if not user:
         return redirect_with_message("/login", error="用户名/邮箱或密码错误", extra={"next": next})
     request.session["user_id"] = int(user["id"])
-    return redirect_with_message(next or "/atlases", message=f"欢迎回来，{user['username']}")
+    settings = get_settings()
+    ensure_user_cat(int(user["id"]), user["username"], settings=settings)
+    return redirect_with_message(next or "/my-cat", message=f"欢迎回来，{user['username']}")
 
 
 @app.get("/logout")
 def logout(request: Request):
     request.session.pop("user_id", None)
     return redirect_with_message("/", message="已退出登录")
+
+
+@app.get("/my-cat")
+def my_cat_page(
+    request: Request,
+    message: str = Query(default=""),
+    error: str = Query(default=""),
+):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login", error="请先登录后查看我的猫", extra={"next": "/my-cat"})
+    settings = get_settings()
+    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    feed_records = build_feed_record_cards(list_cat_feed_records(int(cat["id"]), limit=12))
+    chat_history = list_cat_messages(int(cat["id"]), limit=10)
+    return templates.TemplateResponse(
+        request=request,
+        name="my_cat.html",
+        context={
+            "request": request,
+            "message": message,
+            "error": error,
+            "admin_user": get_current_admin(request),
+            "current_user": current_user,
+            "cat": cat,
+            "stat_cards": build_cat_stat_cards(cat),
+            "feed_records": feed_records,
+            "chat_history": chat_history,
+            "stage_hint": build_cat_stage_hint(cat),
+            "remaining_feeds": max(0, int(cat.get("max_feed_count") or 10) - int(cat.get("feed_count") or 0)),
+            "can_feed": int(cat.get("feed_count") or 0) < int(cat.get("max_feed_count") or 10),
+            "can_generate_final": False,
+            "can_adopt_new": int(cat.get("feed_count") or 0) >= 10,
+        },
+    )
+
+
+@app.post("/my-cat/chat")
+async def my_cat_chat_submit(request: Request, content: str = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login")
+    settings = get_settings()
+    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    if not content.strip():
+        return redirect_with_message("/my-cat", error="请输入对话内容")
+
+    add_cat_message(int(cat["id"]), "user", content)
+    chat_history = list_cat_messages(int(cat["id"]), limit=10)
+    try:
+        response = generate_cat_response(settings, cat, chat_history)
+        add_cat_message(int(cat["id"]), "assistant", response)
+    except Exception as exc:
+        add_cat_message(int(cat["id"]), "assistant", f"喵...我有点累了，暂时不想说话（{exc}）")
+
+    return redirect_with_message("/my-cat")
+
+
+@app.post("/api/my-cat/chat/stream")
+async def my_cat_chat_stream(request: Request, content: str = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    settings = get_settings()
+    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    cleaned = content.strip()
+    if not cleaned:
+        raise HTTPException(status_code=400, detail="请输入对话内容")
+
+    add_cat_message(int(cat["id"]), "user", cleaned)
+    chat_history = list_cat_messages(int(cat["id"]), limit=10)
+
+    async def event_stream():
+        try:
+            response = await asyncio.to_thread(generate_cat_response, settings, cat, chat_history)
+            assembled = ""
+            for chunk in response:
+                assembled += chunk
+                yield f"data: {json.dumps({'type': 'token', 'token': chunk}, ensure_ascii=False)}\n\n"
+                await asyncio.sleep(0.01)
+            add_cat_message(int(cat["id"]), "assistant", assembled)
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            error_text = f"喵...我有点累了，暂时不想说话（{exc}）"
+            add_cat_message(int(cat["id"]), "assistant", error_text)
+            yield f"data: {json.dumps({'type': 'error', 'message': error_text}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/api/my-cat/feed")
+async def my_cat_feed_async(request: Request, raw_input: str = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    settings = get_settings()
+    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 10):
+        raise HTTPException(status_code=400, detail="这只猫已经喂满了 10 次，无法继续喂食，但可以继续对话。")
+    parsed_url = extract_first_url(raw_input) or raw_input.strip()
+    if not is_douyin_url(parsed_url):
+        raise HTTPException(status_code=400, detail="请输入抖音作品链接")
+
+    task = create_async_task("feed", int(cat["id"]))
+    asyncio.create_task(run_feed_task(task["id"], cat, parsed_url, settings))
+    return JSONResponse({"task_id": task["id"], "status": task["status"], "message": "喂养任务已创建"})
+
+
+@app.get("/api/tasks/{task_id}")
+def task_status(task_id: str):
+    task = ASYNC_TASKS.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="任务不存在")
+    return JSONResponse(task)
+
+
+@app.post("/my-cat/adopt-new")
+def my_cat_adopt_new(request: Request):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login")
+    cat = get_user_cat(int(current_user["id"]))
+    if not cat or int(cat.get("feed_count") or 0) < 10:
+        return redirect_with_message("/my-cat", error="当前猫咪还未满级，不能领养下一只")
+    
+    set_all_user_cats_inactive(int(current_user["id"]))
+    settings = get_settings()
+    ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    return redirect_with_message("/my-cat", message="恭喜！你已成功领养了一只新的动漫猫")
+
+
+@app.post("/my-cat/feed")
+def my_cat_feed_submit(request: Request, raw_input: str = Form(...)):
+    return submit_feed_for_current_user(request, raw_input)
+
+
+@app.post("/my-cat/generate-final")
+def my_cat_generate_final(request: Request):
+    return redirect_with_message("/my-cat", message="系统现在会在第 5 次和第 10 次喂养时自动生成新形象。")
+
+
+@app.post("/my-cat/publish")
+def my_cat_publish_toggle(request: Request, is_public: int = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login")
+    settings = get_settings()
+    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    update_cat_public_status(int(cat["id"]), bool(is_public))
+    status_str = "已发布到猫咪广场" if is_public else "已从猫咪广场撤回"
+    return redirect_with_message("/my-cat", message=status_str)
+
+
+@app.get("/plaza")
+def cat_plaza_page(
+    request: Request,
+    message: str = Query(default=""),
+    error: str = Query(default=""),
+):
+    public_cats = [build_cat_card(row) for row in list_public_cats(limit=36)]
+    return templates.TemplateResponse(
+        request=request,
+        name="plaza.html",
+        context={
+            "request": request,
+            "message": message,
+            "error": error,
+            "cat_cards": public_cats,
+            "admin_user": get_current_admin(request),
+            "current_user": get_current_user(request),
+        },
+    )
 
 
 @app.get("/atlas/{atlas_id}")
@@ -346,15 +715,6 @@ def atlas_detail(
             ("共鸣", model1_analysis.get("resonance_score", 0)),
         ],
         max_score=100,
-    )
-    rating_radar_chart = build_radar_chart(
-        [
-            ("快乐", rating_summary.get("avg_happiness_score", 0)),
-            ("知识", rating_summary.get("avg_knowledge_score", 0)),
-            ("节奏", rating_summary.get("avg_rhythm_score", 0)),
-            ("共鸣", rating_summary.get("avg_resonance_score", 0)),
-        ],
-        max_score=10,
     )
     ordered_profile_items = [
         {"key": key, "label": CAT_PROFILE_LABELS.get(key, key), "value": cat_profile[key]}
@@ -384,7 +744,6 @@ def atlas_detail(
             "user_rating": user_rating,
             "rating_summary": rating_summary,
             "ai_radar_chart": ai_radar_chart,
-            "rating_radar_chart": rating_radar_chart,
         },
     )
 
@@ -411,10 +770,7 @@ def comment_submit(
 def rating_submit(
     request: Request,
     atlas_id: int,
-    happiness_score: int = Form(...),
-    knowledge_score: int = Form(...),
-    rhythm_score: int = Form(...),
-    resonance_score: int = Form(...),
+    total_score: int = Form(...),
 ):
     atlas = get_atlas(atlas_id)
     if not atlas:
@@ -422,16 +778,12 @@ def rating_submit(
     current_user = get_current_user(request)
     if not current_user:
         return redirect_with_message("/login", error="评分前请先登录", extra={"next": f"/atlas/{atlas_id}"})
-    values = [happiness_score, knowledge_score, rhythm_score, resonance_score]
-    if any(score < 1 or score > 10 for score in values):
-        return redirect_with_message(f"/atlas/{atlas_id}", error="评分必须在 1 到 10 之间")
+    if total_score < 1 or total_score > 5:
+        return redirect_with_message(f"/atlas/{atlas_id}", error="评分必须在 1 到 5 星之间")
     upsert_rating(
         atlas_id=atlas_id,
         user_id=int(current_user["id"]),
-        happiness_score=happiness_score,
-        knowledge_score=knowledge_score,
-        rhythm_score=rhythm_score,
-        resonance_score=resonance_score,
+        total_score=total_score,
     )
     return redirect_with_message(f"/atlas/{atlas_id}", message="评分已保存")
 

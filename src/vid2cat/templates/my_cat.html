@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>我的猫 - vid2cat</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="top-nav plain-nav">
+            <a class="brand" href="/">vid2cat</a>
+            <div class="nav-actions">
+                <a class="ghost-btn" href="/">首页</a>
+                <a class="ghost-btn active-tab" href="/my-cat">我的猫</a>
+                <a class="ghost-btn" href="/plaza">猫咪广场</a>
+                <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+                <span class="user-badge">已登录：{{ current_user.username }}</span>
+                <a class="ghost-btn" href="/logout">退出</a>
+            </div>
+        </div>
+
+        {% if message %}
+        <div class="notice success">{{ message }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="notice error">{{ error }}</div>
+        {% endif %}
+
+        <section class="dashboard-grid cat-dashboard">
+            <div class="content-card">
+                <div class="section-title-row">
+                    <div>
+                        <h2>{{ cat.name }}</h2>
+                        <span class="section-hint">{{ stage_hint }}</span>
+                    </div>
+                    <div class="pill-row compact">
+                        <span class="pill">编号：{{ cat.cat_no }}</span>
+                        <span class="pill muted">阶段：{{ cat.stage }}</span>
+                        {% if cat.feed_count >= 5 and cat.image_url %}
+                        <form action="/my-cat/publish" method="POST" style="display:inline;">
+                            <input type="hidden" name="is_public" value="{{ 0 if cat.is_public else 1 }}">
+                            <button type="submit" class="pill {% if cat.is_public %}active{% endif %}" style="cursor:pointer; border:none; background:#eee;">
+                                {{ "已公开" if cat.is_public else "私密" }} (点击切换)
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="cat-hero-grid">
+                    <div class="cat-avatar-card">
+                        {% if cat.image_url %}
+                        <img src="{{ cat.image_url }}" alt="{{ cat.name }}">
+                        {% else %}
+                        <div class="cat-avatar-placeholder">
+                            <span>{{ cat.name[:1] }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="chat-container content-card">
+                        <div class="chat-messages" id="chatMessages">
+                            {% if not chat_history %}
+                            <div class="message assistant">
+                                <div class="message-content">
+                                    喵~ 终于见到主人了！快来和我聊天吧！
+                                </div>
+                            </div>
+                            {% else %}
+                            {% for msg in chat_history %}
+                            <div class="message {{ msg.role }}">
+                                <div class="message-content">
+                                    {{ msg.content }}
+                                </div>
+                            </div>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+                        <form id="chat-form" class="chat-input-area" action="/api/my-cat/chat/stream" method="POST">
+                            <input id="chat-input" type="text" name="content" placeholder="跟{{ cat.name }}说点什么..." required>
+                            <button id="chat-submit-btn" type="submit">发送</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="action-row" style="margin-top: 20px; gap: 12px; display: flex;">
+                    {% if can_adopt_new %}
+                    <form action="/my-cat/adopt-new" method="POST" style="flex: 1;">
+                        <button type="submit" class="btn btn-accent w-100" style="background: #ffc107; color: #000; border: none; width: 100%;">
+                            🎉 领养下一只猫
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                <div class="info-panel">
+                    <div class="stats-row">
+                        <div class="stat-box">
+                            <span class="label">喂养进度</span>
+                            <strong class="{% if cat.feed_count >= cat.max_feed_count %}limit-reached{% endif %}">
+                                {{ cat.feed_count }}/{{ cat.max_feed_count }}
+                                {% if cat.feed_count >= cat.max_feed_count %} (已满) {% endif %}
+                            </strong>
+                        </div>
+                        <div class="stat-box">
+                            <span class="label">总能量</span>
+                            <strong>{{ cat.overall_power }}</strong>
+                        </div>
+                    </div>
+                    <div class="persona-info">
+                        <h3>当前性格：{{ cat.personality }}</h3>
+                        <p>{{ cat.story_summary }}</p>
+                    </div>
+                    <div class="latest-summary">
+                        <h3>最近成长总结</h3>
+                        <p>{{ cat.latest_summary or "还没有新的成长总结。" }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="content-card side-card">
+                <div class="section-title-row">
+                    <h2>当前属性</h2>
+                    <span class="section-hint">每次喂抖音后都会更新</span>
+                </div>
+                <div class="profile-grid">
+                    {% for item in stat_cards %}
+                    <div class="profile-item">
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.value }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+            </aside>
+        </section>
+
+        <section class="dashboard-grid cat-dashboard">
+            <div class="content-card">
+                <div class="section-title-row">
+                    <div>
+                        <h2>喂 1 次抖音链接</h2>
+                        <span class="section-hint">支持整段文本粘贴，系统会自动提取第一个抖音链接并生成成长记录</span>
+                    </div>
+                    <span class="pill muted">剩余 {{ remaining_feeds }} 次</span>
+                </div>
+                {% if can_feed %}
+                <form id="parse-form" class="parse-form" action="/my-cat/feed" method="post">
+                    <textarea
+                        id="parse-text-input"
+                        name="raw_input"
+                        rows="5"
+                        placeholder="粘贴抖音分享文案或作品链接，例如：https://v.douyin.com/xxxxx/"
+                        required
+                    ></textarea>
+                    <div class="action-row">
+                        <button
+                            id="parse-submit-btn"
+                            class="accent-btn"
+                            type="submit"
+                            data-loading-text="喂养中..."
+                            data-reset-text="开始喂养"
+                        >开始喂养</button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="empty-state">
+                    这只猫已经喂满 10 次抖音链接，已达到最高等级。现在它只想和你聊天！
+                </div>
+                {% endif %}
+            </div>
+
+            <aside class="content-card side-card">
+                <div class="section-title-row">
+                    <h2>成长说明</h2>
+                    <span class="section-hint">陪伴你的猫咪成长</span>
+                </div>
+                <div class="moment-list">
+                    <div class="moment-item">
+                        <strong>初始领养</strong>
+                        <p>系统自动生成初始 AI 人设与形象。</p>
+                    </div>
+                    <div class="moment-item">
+                        <strong>第 5 次进化</strong>
+                        <p>吸收 5 段内容能量后，猫咪形象将发生第一次重大进化。</p>
+                    </div>
+                    <div class="moment-item">
+                        <strong>第 10 次满级</strong>
+                        <p>达成终极形态，解锁永久形象并支持领养新猫。</p>
+                    </div>
+                </div>
+            </aside>
+        </section>
+
+        <section class="content-card">
+            <div class="section-title-row">
+                <h2>成长记录</h2>
+                <span class="section-hint">展示每次喂养的视频摘要和属性变化</span>
+            </div>
+            {% if feed_records %}
+            <div class="feed-record-list">
+                {% for record in feed_records %}
+                <article class="feed-record-card">
+                    <div class="comment-header">
+                        <strong>第 {{ record.feed_index }} 次喂养：{{ record.video_title }}</strong>
+                        <span>{{ record.created_at.replace('T', ' ')[:19] }}</span>
+                    </div>
+                    <div class="pill-row compact">
+                        <span class="pill muted">作者：{{ record.video_author or "未知作者" }}</span>
+                        <span class="pill muted">标签：{{ record.tag_summary or "成长事件" }}</span>
+                    </div>
+                    <p>{{ record.video_summary }}</p>
+                    {% if record.delta_items %}
+                    <div class="delta-row">
+                        {% for delta in record.delta_items %}
+                        <span class="delta-pill{% if delta.positive %} positive{% else %} negative{% endif %}">
+                            {{ delta.label }} {{ delta.display }}
+                        </span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state compact">
+                还没有成长记录，先喂第 1 条抖音链接。
+            </div>
+            {% endif %}
+        </section>
+    </div>
+
+    <div id="parse-loading" class="loading-overlay hidden" aria-hidden="true">
+        <div class="loading-card">
+            <div class="loading-spinner"></div>
+            <h3>正在喂养你的猫</h3>
+            <p>系统正在解析抖音内容并计算属性变化，请稍候。</p>
+        </div>
+    </div>
+
+    <script>
+        // 自动滚动聊天记录到底部
+        const chatMessages = document.getElementById('chatMessages');
+        if (chatMessages) {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+    </script>
+    <script src="{{ request.url_for('static', path='app.js') }}"></script>
+</body>
+</html>

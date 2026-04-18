@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>vid2cat - 抖音视频 AI 猫咪图鉴</title>
+    <title>vid2cat - 动漫猫养成</title>
     <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
 </head>
 <body>
@@ -13,45 +13,54 @@
             <div class="top-nav">
                 <a class="brand" href="/">vid2cat</a>
                 <div class="nav-actions">
-                    <a class="ghost-btn active-tab" href="/">抖音解析</a>
-                    <a class="ghost-btn" href="/atlases">图鉴列表</a>
-                    <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+                    <a class="ghost-btn active-tab" href="/">首页</a>
+                    <a class="ghost-btn" href="/plaza">猫咪广场</a>
                     {% if current_user %}
+                    <a class="ghost-btn" href="/my-cat">我的猫</a>
                     <span class="user-badge">已登录：{{ current_user.username }}</span>
                     <a class="ghost-btn" href="/logout">退出</a>
                     {% else %}
                     <a class="ghost-btn" href="/login">登录</a>
                     <a class="ghost-btn" href="/register">注册</a>
                     {% endif %}
+                    <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
                 </div>
             </div>
             <div class="hero-grid">
                 <div>
-                    <p class="eyebrow">抖音视频 AI 猫咪图鉴系统</p>
-                    <h1>只粘贴一段文字，自动提取抖音链接并解析</h1>
+                    <p class="eyebrow">抖音内容驱动的动漫猫养成系统</p>
+                    <h1>先领取一只猫，再用抖音链接喂它成长</h1>
                     <p class="hero-copy">
-                        现在首页只做抖音解析，不再做抖音搜索。你可以直接粘贴聊天文本、
-                        分享文案或整段口令，系统会先用正则提取抖音链接，再进入解析流程。
+                        每位用户都会拥有一只自己的动漫猫。你给它喂抖音链接，它就会吸收内容能量，
+                        改变智慧、毅力、创造、灵敏、协作和能量属性。最多喂 5 次，逐步走向终局形态。
                     </p>
                     <div class="pill-row">
-                        <span class="pill">Python + FastAPI</span>
-                        <span class="pill">uv 管理</span>
-                        <span class="pill">SQLite 原型</span>
-                        <span class="pill">HTML 模板</span>
+                        <span class="pill">注册即领猫</span>
+                        <span class="pill">1~5 次成长</span>
+                        <span class="pill">属性实时更新</span>
+                        <span class="pill">数据统一落在 data/</span>
+                    </div>
+                    <div class="action-row hero-actions">
+                        {% if current_user %}
+                        <a class="primary-btn anchor-btn" href="/my-cat">进入我的猫</a>
+                        {% else %}
+                        <a class="primary-btn anchor-btn" href="/register">立即领取</a>
+                        <a class="ghost-btn" href="/login">已有账号去登录</a>
+                        {% endif %}
                     </div>
                 </div>
                 <div class="feature-panel">
                     <div class="feature-item">
-                        <span class="feature-label">图床</span>
+                        <span class="feature-label">喂养规则</span>
+                        <strong>每只猫最多喂 5 条抖音链接</strong>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-label">属性系统</span>
+                        <strong>能量、智慧、毅力、创造、灵敏、协作</strong>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-label">外部能力</span>
                         <strong>{{ image_host_status }}</strong>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-label">图鉴入口</span>
-                        <strong>图鉴列表与抖音解析已拆分为两个界面</strong>
-                    </div>
-                    <div class="feature-item">
-                        <span class="feature-label">抖音能力</span>
-                        <strong>正则提取抖音链接后直连解析</strong>
                     </div>
                 </div>
             </div>
@@ -64,50 +73,66 @@
         <div class="notice error">{{ error }}</div>
         {% endif %}
 
-        <section class="search-box">
-            <div class="section-title-row">
-                <h2>抖音解析</h2>
-                <span class="section-hint">粘贴任意包含抖音链接的文本，系统会自动提取并解析</span>
+        <section class="dashboard-grid">
+            <div class="content-card">
+                <div class="section-title-row">
+                    <h2>动漫猫养成之旅</h2>
+                    <span class="section-hint">从领取初始猫到达成终局形态的完整闭环</span>
+                </div>
+                <div class="journey-grid">
+                    <div class="journey-step">
+                        <span class="pill muted">01</span>
+                        <strong>注册即领猫</strong>
+                        <p>系统会自动为你领取一只动漫猫，它带有随机的初始属性和背景故事。</p>
+                    </div>
+                    <div class="journey-step">
+                        <span class="pill muted">02</span>
+                        <strong>喂抖音链接成长</strong>
+                        <p>给猫喂食抖音链接，它会解析内容能量并增加智慧、毅力等六维属性。</p>
+                    </div>
+                    <div class="journey-step">
+                        <span class="pill muted">03</span>
+                        <strong>对话与交互</strong>
+                        <p>在对话页与猫咪互动，它会根据性格回复你，甚至在对话中也能喂食链接。</p>
+                    </div>
+                    <div class="journey-step">
+                        <span class="pill muted">04</span>
+                        <strong>达成终局形态</strong>
+                        <p>喂养 5 次后，系统将综合所有成长经历，生成独特的终局动漫猫形象。</p>
+                    </div>
+                    <div class="journey-step">
+                        <span class="pill muted">05</span>
+                        <strong>发布到广场</strong>
+                        <p>将你的终局猫发布到广场，与其他用户分享它的成长故事。</p>
+                    </div>
+                </div>
             </div>
-            <form id="parse-form" class="parse-form" action="/parse" method="post">
-                <textarea
-                    id="parse-text-input"
-                    name="raw_input"
-                    rows="6"
-                    placeholder="例如：8.99 09/27 ... https://v.douyin.com/xxxxx/ 复制此链接，打开抖音搜索，直接观看视频！"
-                    required
-                >{{ text }}</textarea>
-                {% if extracted_url %}
-                <div class="parse-preview">
-                    <span class="tag tag-local">已提取链接</span>
-                    <span class="section-hint">{{ extracted_url }}</span>
+            <aside class="content-card side-card">
+                <div class="section-title-row">
+                    <h2>当前状态</h2>
+                    <span class="section-hint">V2 最小闭环已切换到“我的猫”主流程</span>
+                </div>
+                {% if my_cat %}
+                <div class="mini-cat-card">
+                    <span class="pill">我的猫编号：{{ my_cat.cat_no }}</span>
+                    <h3>{{ my_cat.name }}</h3>
+                    <p>{{ my_cat.story_summary }}</p>
+                    <div class="pill-row compact">
+                        <span class="pill muted">阶段：{{ my_cat.stage }}</span>
+                        <span class="pill muted">喂养：{{ my_cat.feed_count }}/{{ my_cat.max_feed_count }}</span>
+                        <span class="pill muted">综合能量：{{ my_cat.overall_power }}</span>
+                    </div>
+                    <div class="action-row section-gap">
+                        <a class="accent-btn anchor-btn" href="/my-cat">继续养成</a>
+                    </div>
+                </div>
+                {% else %}
+                <div class="empty-state compact">
+                    现在还没有你的猫，注册成功后会自动领取一只初始动漫猫。
                 </div>
                 {% endif %}
-                <div class="action-row">
-                    <button id="parse-submit-btn" class="accent-btn" type="submit">开始解析生成图鉴</button>
-                </div>
-            </form>
-        </section>
-
-        <section class="content-card">
-            <div class="section-title-row">
-                <h2>界面切换</h2>
-                <span class="section-hint">首页只做抖音解析，图鉴内容统一在图鉴列表页查看</span>
-            </div>
-            <div class="action-row">
-                <a class="primary-btn anchor-btn" href="/atlases">进入图鉴列表</a>
-            </div>
+            </aside>
         </section>
     </div>
-
-    <div id="parse-loading" class="loading-overlay hidden" aria-hidden="true">
-        <div class="loading-card">
-            <div class="loading-spinner"></div>
-            <h3>正在解析抖音链接</h3>
-            <p>模型分析和图片生成需要一些时间，请稍候。</p>
-        </div>
-    </div>
-
-    <script src="{{ request.url_for('static', path='app.js') }}"></script>
 </body>
 </html>

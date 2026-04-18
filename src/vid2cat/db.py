@@ -149,6 +149,62 @@ def init_db() -> None:
                 value TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS cats (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                cat_no TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                stage TEXT NOT NULL DEFAULT '初始态',
+                feed_count INTEGER NOT NULL DEFAULT 0,
+                max_feed_count INTEGER NOT NULL DEFAULT 10,
+                wisdom INTEGER NOT NULL DEFAULT 10,
+                grit INTEGER NOT NULL DEFAULT 10,
+                creativity INTEGER NOT NULL DEFAULT 10,
+                agility INTEGER NOT NULL DEFAULT 10,
+                cooperation INTEGER NOT NULL DEFAULT 10,
+                overall_power INTEGER NOT NULL DEFAULT 50,
+                image_url TEXT NOT NULL DEFAULT '',
+                personality TEXT NOT NULL DEFAULT '',
+                story_summary TEXT NOT NULL DEFAULT '',
+                latest_summary TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 1,
+                is_public INTEGER NOT NULL DEFAULT 0,
+                final_persona_json TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS cat_feed_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cat_id INTEGER NOT NULL,
+                feed_index INTEGER NOT NULL,
+                source_url TEXT NOT NULL,
+                canonical_url TEXT NOT NULL,
+                aweme_id TEXT NOT NULL DEFAULT '',
+                video_title TEXT NOT NULL,
+                video_author TEXT NOT NULL DEFAULT '',
+                video_cover_url TEXT NOT NULL DEFAULT '',
+                video_summary TEXT NOT NULL DEFAULT '',
+                tag_summary TEXT NOT NULL DEFAULT '',
+                wisdom_delta INTEGER NOT NULL DEFAULT 0,
+                grit_delta INTEGER NOT NULL DEFAULT 0,
+                creativity_delta INTEGER NOT NULL DEFAULT 0,
+                agility_delta INTEGER NOT NULL DEFAULT 0,
+                cooperation_delta INTEGER NOT NULL DEFAULT 0,
+                model1_output TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(cat_id) REFERENCES cats(id)
+            );
+            CREATE TABLE IF NOT EXISTS cat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cat_id INTEGER NOT NULL,
+                role TEXT NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(cat_id) REFERENCES cats(id)
+            );
             """
         )
         ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
@@ -159,6 +215,44 @@ def init_db() -> None:
         ensure_column(conn, "atlases", "model3_output", "TEXT")
         ensure_column(conn, "atlases", "cat_image_url", "TEXT")
         ensure_column(conn, "atlases", "cat_image_prompt", "TEXT")
+        ensure_column(conn, "ratings", "total_score", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cats", "is_active", "INTEGER NOT NULL DEFAULT 1")
+        ensure_column(conn, "cats", "is_public", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cats", "final_persona_json", "TEXT NOT NULL DEFAULT ''")
+
+        # 迁移：移除 cats 表 user_id 的 UNIQUE 约束 (SQLite 需要通过重建表实现)
+        rows = conn.execute("PRAGMA table_info(cats)").fetchall()
+        if rows:
+            # 检查是否有 UNIQUE 索引
+            indexes = conn.execute("PRAGMA index_list(cats)").fetchall()
+            has_unique_userid = any(idx["unique"] == 1 and "user_id" in [info["name"] for info in conn.execute(f"PRAGMA index_info({idx['name']})").fetchall()] for idx in indexes)
+            
+            # 如果 user_id 还是唯一的，或者我们需要更新 max_feed_count 默认值
+            # 简单起见，如果发现 max_feed_count 默认值不是 10，我们就触发一次迁移
+            # 或者我们直接尝试修改 max_feed_count 的现有数据
+            conn.execute("UPDATE cats SET max_feed_count = 10 WHERE max_feed_count = 5")
+        conn.execute(
+            """
+            UPDATE ratings
+            SET total_score = MIN(
+                5,
+                MAX(
+                    1,
+                    CAST(
+                        ROUND(
+                            (
+                                COALESCE(happiness_score, 0) +
+                                COALESCE(knowledge_score, 0) +
+                                COALESCE(rhythm_score, 0) +
+                                COALESCE(resonance_score, 0)
+                            ) / 8.0
+                        ) AS INTEGER
+                    )
+                )
+            )
+            WHERE total_score = 0
+            """
+        )
         bootstrap_settings(conn)
         bootstrap_admin(conn)
     seed_demo_data()
@@ -437,6 +531,216 @@ def register_user(username: str, email: str, password: str) -> tuple[bool, str]:
         return False, "用户名或邮箱已存在"
 
 
+def clamp_stat(value: int) -> int:
+    return max(0, min(100, int(value)))
+
+
+def compute_overall_power(
+    wisdom: int,
+    grit: int,
+    creativity: int,
+    agility: int,
+    cooperation: int,
+) -> int:
+    return wisdom + grit + creativity + agility + cooperation
+
+
+def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    now = utcnow()
+    base_name = (username.strip() or "新手")[:8]
+    wisdom = grit = creativity = agility = cooperation = 10
+    profile = ai_data.get("profile") if ai_data else {}
+    return {
+        "user_id": user_id,
+        "cat_no": f"CAT-{user_id:05d}-{int(datetime.utcnow().timestamp())}",
+        "name": profile.get("name") or f"{base_name}的小猫",
+        "stage": "初始态",
+        "feed_count": 0,
+        "max_feed_count": 10,
+        "wisdom": wisdom,
+        "grit": grit,
+        "creativity": creativity,
+        "agility": agility,
+        "cooperation": cooperation,
+        "overall_power": compute_overall_power(wisdom, grit, creativity, agility, cooperation),
+        "image_url": ai_data.get("image_url") if ai_data else "",
+        "personality": profile.get("personality") or "好奇、亲人，正等待第一条抖音链接来塑造性格。",
+        "story_summary": profile.get("story") or "这是一只刚刚被领取的动漫猫，世界观和能力都还在成长中。",
+        "latest_summary": "还没有喂过抖音链接，先试着喂第一条吧。",
+        "is_active": 1,
+        "created_at": now,
+        "updated_at": now,
+    }
+
+
+def create_initial_cat_for_user(user_id: int, username: str, ai_data: dict[str, Any] | None = None) -> dict[str, Any]:
+    payload = build_initial_cat_payload(user_id, username, ai_data)
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO cats (
+                user_id, cat_no, name, stage, feed_count, max_feed_count,
+                wisdom, grit, creativity, agility, cooperation, overall_power,
+                image_url, personality, story_summary, latest_summary, is_active, created_at, updated_at
+            ) VALUES (
+                :user_id, :cat_no, :name, :stage, :feed_count, :max_feed_count,
+                :wisdom, :grit, :creativity, :agility, :cooperation, :overall_power,
+                :image_url, :personality, :story_summary, :latest_summary, :is_active, :created_at, :updated_at
+            )
+            """,
+            payload,
+        )
+    return get_user_cat(user_id) or payload
+
+
+def get_user_cat(user_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM cats
+            WHERE user_id = ? AND is_active = 1
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def set_all_user_cats_inactive(user_id: int) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE cats SET is_active = 0, updated_at = ? WHERE user_id = ?",
+            (utcnow(), user_id),
+        )
+
+
+def ensure_user_cat(user_id: int, username: str, settings: dict[str, str] | None = None) -> dict[str, Any]:
+    cat = get_user_cat(user_id)
+    if cat:
+        return cat
+
+    ai_data = None
+    if settings:
+        from .services import generate_initial_cat_ai_data
+        try:
+            ai_data = generate_initial_cat_ai_data(settings, username)
+        except Exception:
+            pass
+
+    return create_initial_cat_for_user(user_id, username, ai_data)
+
+
+def list_cat_feed_records(cat_id: int, limit: int = 20) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM cat_feed_records
+            WHERE cat_id = ?
+            ORDER BY feed_index DESC, created_at DESC
+            LIMIT ?
+            """,
+            (cat_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, Any]:
+    now = utcnow()
+    with get_connection() as conn:
+        cat_row = conn.execute("SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)).fetchone()
+        if not cat_row:
+            raise ValueError("猫咪不存在")
+        cat = dict(cat_row)
+        next_feed_count = int(cat["feed_count"]) + 1
+        max_feeds = int(cat["max_feed_count"])
+        if next_feed_count > max_feeds:
+            raise ValueError(f"这只猫已经喂满了 {max_feeds} 次，无法继续喂食，但可以继续对话。")
+
+        updated_stats = {
+            "wisdom": clamp_stat(int(cat["wisdom"]) + int(feed_result.get("wisdom_delta") or 0)),
+            "grit": clamp_stat(int(cat["grit"]) + int(feed_result.get("grit_delta") or 0)),
+            "creativity": clamp_stat(int(cat["creativity"]) + int(feed_result.get("creativity_delta") or 0)),
+            "agility": clamp_stat(int(cat["agility"]) + int(feed_result.get("agility_delta") or 0)),
+            "cooperation": clamp_stat(int(cat["cooperation"]) + int(feed_result.get("cooperation_delta") or 0)),
+        }
+        overall_power = compute_overall_power(
+            updated_stats["wisdom"],
+            updated_stats["grit"],
+            updated_stats["creativity"],
+            updated_stats["agility"],
+            updated_stats["cooperation"],
+        )
+        stage = "成长中"
+        if next_feed_count >= max_feeds:
+            stage = "已满级"
+        elif next_feed_count == 5:
+            stage = "进化中"
+
+        conn.execute(
+            """
+            INSERT INTO cat_feed_records (
+                cat_id, feed_index, source_url, canonical_url, aweme_id, video_title, video_author,
+                video_cover_url, video_summary, tag_summary, wisdom_delta, grit_delta,
+                creativity_delta, agility_delta, cooperation_delta, model1_output, created_at
+            ) VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
+            (
+                cat_id,
+                next_feed_count,
+                str(feed_result.get("source_url") or ""),
+                str(feed_result.get("canonical_url") or ""),
+                str(feed_result.get("aweme_id") or ""),
+                str(feed_result.get("video_title") or "未命名视频"),
+                str(feed_result.get("video_author") or ""),
+                str(feed_result.get("video_cover_url") or ""),
+                str(feed_result.get("video_summary") or ""),
+                str(feed_result.get("tag_summary") or ""),
+                int(feed_result.get("wisdom_delta") or 0),
+                int(feed_result.get("grit_delta") or 0),
+                int(feed_result.get("creativity_delta") or 0),
+                int(feed_result.get("agility_delta") or 0),
+                int(feed_result.get("cooperation_delta") or 0),
+                str(feed_result.get("model1_output") or ""),
+                now,
+            ),
+        )
+
+        conn.execute(
+            """
+            UPDATE cats
+            SET stage = ?,
+                feed_count = ?,
+                wisdom = ?,
+                grit = ?,
+                creativity = ?,
+                agility = ?,
+                cooperation = ?,
+                overall_power = ?,
+                latest_summary = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (
+                stage,
+                next_feed_count,
+                updated_stats["wisdom"],
+                updated_stats["grit"],
+                updated_stats["creativity"],
+                updated_stats["agility"],
+                updated_stats["cooperation"],
+                overall_power,
+                str(feed_result.get("video_summary") or ""),
+                now,
+                cat_id,
+            ),
+        )
+    return get_user_cat(int(cat["user_id"])) or {}
+
+
 def list_recent_users(limit: int = 8) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
@@ -555,10 +859,7 @@ def list_comments(atlas_id: int) -> list[dict[str, Any]]:
                 comments.username,
                 comments.content,
                 comments.created_at,
-                ratings.happiness_score,
-                ratings.knowledge_score,
-                ratings.rhythm_score,
-                ratings.resonance_score
+                ratings.total_score
             FROM comments
             LEFT JOIN users
                 ON users.username = comments.username
@@ -577,33 +878,28 @@ def list_comments(atlas_id: int) -> list[dict[str, Any]]:
 def upsert_rating(
     atlas_id: int,
     user_id: int,
-    happiness_score: int,
-    knowledge_score: int,
-    rhythm_score: int,
-    resonance_score: int,
+    total_score: int,
 ) -> None:
     now = utcnow()
     with get_connection() as conn:
         conn.execute(
             """
             INSERT INTO ratings (
-                atlas_id, user_id, happiness_score, knowledge_score, rhythm_score, resonance_score,
+                atlas_id, user_id, happiness_score, knowledge_score, rhythm_score, resonance_score, total_score,
                 created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(atlas_id, user_id) DO UPDATE SET
-                happiness_score = excluded.happiness_score,
-                knowledge_score = excluded.knowledge_score,
-                rhythm_score = excluded.rhythm_score,
-                resonance_score = excluded.resonance_score,
+                total_score = excluded.total_score,
                 updated_at = excluded.updated_at
             """,
             (
                 atlas_id,
                 user_id,
-                happiness_score,
-                knowledge_score,
-                rhythm_score,
-                resonance_score,
+                0,
+                0,
+                0,
+                0,
+                total_score,
                 now,
                 now,
             ),
@@ -614,7 +910,7 @@ def get_user_rating(atlas_id: int, user_id: int) -> dict[str, Any] | None:
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT atlas_id, user_id, happiness_score, knowledge_score, rhythm_score, resonance_score, updated_at
+            SELECT atlas_id, user_id, total_score, updated_at
             FROM ratings
             WHERE atlas_id = ? AND user_id = ?
             """,
@@ -623,16 +919,84 @@ def get_user_rating(atlas_id: int, user_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def update_cat_public_status(cat_id: int, is_public: bool) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE cats SET is_public = ?, updated_at = ? WHERE id = ?",
+            (1 if is_public else 0, utcnow(), cat_id),
+        )
+
+
+def list_public_cats(limit: int = 12) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT cats.*, users.username
+            FROM cats
+            JOIN users ON users.id = cats.user_id
+            WHERE is_public = 1
+            ORDER BY cats.updated_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def add_cat_message(cat_id: int, role: str, content: str) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT INTO cat_messages (cat_id, role, content, created_at) VALUES (?, ?, ?, ?)",
+            (cat_id, role, content, utcnow()),
+        )
+
+
+def list_cat_messages(cat_id: int, limit: int = 50) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM cat_messages
+            WHERE cat_id = ?
+            ORDER BY created_at ASC
+            LIMIT ?
+            """,
+            (cat_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_cat_final_persona(
+    cat_id: int,
+    persona_json: str,
+    image_url: str,
+    personality: str,
+    story: str,
+    stage: str = '已完结',
+) -> None:
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE cats
+            SET stage = ?,
+                final_persona_json = ?,
+                image_url = ?,
+                personality = ?,
+                story_summary = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (stage, persona_json, image_url, personality, story, utcnow(), cat_id),
+        )
+
+
 def get_rating_summary(atlas_id: int) -> dict[str, Any]:
     with get_connection() as conn:
         row = conn.execute(
             """
             SELECT
                 COUNT(*) AS rating_count,
-                AVG(happiness_score) AS avg_happiness_score,
-                AVG(knowledge_score) AS avg_knowledge_score,
-                AVG(rhythm_score) AS avg_rhythm_score,
-                AVG(resonance_score) AS avg_resonance_score
+                AVG(total_score) AS avg_total_score
             FROM ratings
             WHERE atlas_id = ?
             """,
@@ -641,15 +1005,9 @@ def get_rating_summary(atlas_id: int) -> dict[str, Any]:
     if not row:
         return {
             "rating_count": 0,
-            "avg_happiness_score": 0,
-            "avg_knowledge_score": 0,
-            "avg_rhythm_score": 0,
-            "avg_resonance_score": 0,
+            "avg_total_score": 0,
         }
     return {
         "rating_count": int(row["rating_count"] or 0),
-        "avg_happiness_score": round(float(row["avg_happiness_score"] or 0), 1),
-        "avg_knowledge_score": round(float(row["avg_knowledge_score"] or 0), 1),
-        "avg_rhythm_score": round(float(row["avg_rhythm_score"] or 0), 1),
-        "avg_resonance_score": round(float(row["avg_resonance_score"] or 0), 1),
+        "avg_total_score": round(float(row["avg_total_score"] or 0), 1),
     }

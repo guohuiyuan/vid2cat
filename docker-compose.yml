@@ -1,6 +1,6 @@
 services:
   vid2cat:
-    image: ${IMAGE_NAME:-docker.io/${DOCKERHUB_USERNAME:-yourname}/vid2cat:latest}
+    image: guohuiyuan/vid2cat:latest
     container_name: vid2cat
     restart: unless-stopped
     ports:

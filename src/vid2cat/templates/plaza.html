@@ -1,0 +1,54 @@
+{% extends "index.html" %}
+
+{% block title %}猫咪广场 - vid2cat{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="page-header">
+        <h1>猫咪广场</h1>
+        <p class="subtitle">这里展示了所有用户公开的终局猫咪及其独特个性。</p>
+    </div>
+
+    {% if cat_cards %}
+    <div class="atlas-grid">
+        {% for card in cat_cards %}
+        <div class="atlas-card">
+            <div class="card-image">
+                {% if card.image_url %}
+                <img src="{{ card.image_url }}" alt="{{ card.cat_name }}">
+                {% else %}
+                <div class="image-placeholder">暂无猫咪形象</div>
+                {% endif %}
+                <div class="card-badge rarity-{{ card.stage }}">
+                    {{ card.stage }}
+                </div>
+            </div>
+            <div class="card-content">
+                <div class="card-header">
+                    <h3 class="cat-name">{{ card.cat_name }}</h3>
+                    <span class="breed-tag">@{{ card.username }}</span>
+                </div>
+                <p class="card-summary">{{ card.summary }}</p>
+                <div class="card-footer">
+                    <div class="power-info">
+                        <span class="label">综合战力</span>
+                        <span class="value">{{ card.overall_power }}</span>
+                    </div>
+                    <div class="feed-info">
+                        <span class="label">喂养</span>
+                        <span class="value">{{ card.feed_count }}/{{ card.max_feed_count }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon">🐱</div>
+        <p>广场上空空如也，快去喂养并发布你的猫咪吧！</p>
+        <a href="/my-cat" class="btn btn-primary">我的猫咪</a>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

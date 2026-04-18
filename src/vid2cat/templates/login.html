@@ -11,8 +11,7 @@
         <div class="top-nav plain-nav">
             <a class="brand" href="/">vid2cat</a>
             <div class="nav-actions">
-                <a class="ghost-btn" href="/">抖音解析</a>
-                <a class="ghost-btn" href="/atlases">图鉴列表</a>
+                <a class="ghost-btn" href="/">首页</a>
                 <a class="ghost-btn" href="/register">注册</a>
                 <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
             </div>
@@ -28,7 +27,7 @@
         <section class="content-card">
             <div class="section-title-row">
                 <h1>登录账号</h1>
-                <span class="section-hint">登录后才能使用评论功能</span>
+                <span class="section-hint">登录后进入“我的猫”，继续喂抖音链接养成</span>
             </div>
             <form class="stack-form" action="/login" method="post">
                 <input type="hidden" name="next" value="{{ next }}">
@@ -36,6 +35,9 @@
                 <input type="password" name="password" placeholder="密码" required>
                 <button class="primary-btn full-width" type="submit">立即登录</button>
             </form>
+            <div class="empty-state compact">
+                如果你的账号是旧账号，登录后系统也会自动补领一只初始猫。
+            </div>
             <div class="form-footer-hint">
                 <span class="section-hint">还没有账号？</span>
                 <a class="ghost-btn" href="/register">去注册</a>
