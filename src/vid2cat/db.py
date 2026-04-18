@@ -101,6 +101,7 @@ def init_db() -> None:
                 tags TEXT,
                 status TEXT NOT NULL DEFAULT 'draft',
                 hot_score INTEGER NOT NULL DEFAULT 72,
+                happiness_score INTEGER NOT NULL DEFAULT 70,
                 rhythm_score INTEGER NOT NULL DEFAULT 70,
                 knowledge_score INTEGER NOT NULL DEFAULT 68,
                 resonance_score INTEGER NOT NULL DEFAULT 75,
@@ -128,6 +129,21 @@ def init_db() -> None:
                 FOREIGN KEY(atlas_id) REFERENCES atlases(id)
             );
 
+            CREATE TABLE IF NOT EXISTS ratings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                atlas_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                happiness_score INTEGER NOT NULL,
+                knowledge_score INTEGER NOT NULL,
+                rhythm_score INTEGER NOT NULL,
+                resonance_score INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(atlas_id, user_id),
+                FOREIGN KEY(atlas_id) REFERENCES atlases(id),
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            );
+
             CREATE TABLE IF NOT EXISTS app_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL,
@@ -137,6 +153,7 @@ def init_db() -> None:
         )
         ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
         ensure_column(conn, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "atlases", "happiness_score", "INTEGER NOT NULL DEFAULT 70")
         ensure_column(conn, "atlases", "model1_output", "TEXT")
         ensure_column(conn, "atlases", "model2_output", "TEXT")
         ensure_column(conn, "atlases", "model3_output", "TEXT")
@@ -196,6 +213,7 @@ def seed_demo_data() -> None:
             "tags": "猫咪,踩点,样例",
             "status": "demo",
             "hot_score": 88,
+            "happiness_score": 90,
             "rhythm_score": 92,
             "knowledge_score": 64,
             "resonance_score": 86,
@@ -224,6 +242,7 @@ def seed_demo_data() -> None:
             "tags": "知识,布偶,样例",
             "status": "demo",
             "hot_score": 81,
+            "happiness_score": 72,
             "rhythm_score": 73,
             "knowledge_score": 91,
             "resonance_score": 78,
@@ -251,13 +270,13 @@ def seed_demo_data() -> None:
                 """
                 INSERT INTO atlases (
                     title, source_url, canonical_url, aweme_id, author_name, cover_url, video_url,
-                    duration_seconds, description, tags, status, hot_score, rhythm_score,
+                    duration_seconds, description, tags, status, hot_score, happiness_score, rhythm_score,
                     knowledge_score, resonance_score, ai_summary, optimization_tips, model1_output, model2_output, model3_output,
                     cat_profile_json, prompt_scaffold, cat_image_url, cat_image_prompt, image_host_status, parse_error,
                     created_at, updated_at, author_avatar
                 ) VALUES (
                     :title, :source_url, :canonical_url, :aweme_id, :author_name, :cover_url, :video_url,
-                    :duration_seconds, :description, :tags, :status, :hot_score, :rhythm_score,
+                    :duration_seconds, :description, :tags, :status, :hot_score, :happiness_score, :rhythm_score,
                     :knowledge_score, :resonance_score, :ai_summary, :optimization_tips, :model1_output, :model2_output, :model3_output,
                     :cat_profile_json, :prompt_scaffold, :cat_image_url, :cat_image_prompt, :image_host_status, :parse_error,
                     :created_at, :updated_at, ''
@@ -295,6 +314,7 @@ def save_atlas(atlas: dict[str, Any]) -> int:
         "tags": normalize_tags(atlas.get("tags")),
         "status": atlas.get("status", "draft"),
         "hot_score": int(atlas.get("hot_score") or 72),
+        "happiness_score": int(atlas.get("happiness_score") or 70),
         "rhythm_score": int(atlas.get("rhythm_score") or 70),
         "knowledge_score": int(atlas.get("knowledge_score") or 68),
         "resonance_score": int(atlas.get("resonance_score") or 75),
@@ -335,6 +355,7 @@ def save_atlas(atlas: dict[str, Any]) -> int:
                     tags = :tags,
                     status = :status,
                     hot_score = :hot_score,
+                    happiness_score = :happiness_score,
                     rhythm_score = :rhythm_score,
                     knowledge_score = :knowledge_score,
                     resonance_score = :resonance_score,
@@ -360,12 +381,12 @@ def save_atlas(atlas: dict[str, Any]) -> int:
             """
             INSERT INTO atlases (
                 title, source_url, canonical_url, aweme_id, author_name, author_avatar, cover_url,
-                video_url, duration_seconds, description, tags, status, hot_score, rhythm_score,
+                video_url, duration_seconds, description, tags, status, hot_score, happiness_score, rhythm_score,
                 knowledge_score, resonance_score, ai_summary, optimization_tips, model1_output, model2_output, model3_output,
                 cat_profile_json, prompt_scaffold, cat_image_url, cat_image_prompt, image_host_status, parse_error, created_at, updated_at
             ) VALUES (
                 :title, :source_url, :canonical_url, :aweme_id, :author_name, :author_avatar, :cover_url,
-                :video_url, :duration_seconds, :description, :tags, :status, :hot_score, :rhythm_score,
+                :video_url, :duration_seconds, :description, :tags, :status, :hot_score, :happiness_score, :rhythm_score,
                 :knowledge_score, :resonance_score, :ai_summary, :optimization_tips, :model1_output, :model2_output, :model3_output,
                 :cat_profile_json, :prompt_scaffold, :cat_image_url, :cat_image_prompt, :image_host_status, :parse_error, :created_at, :updated_at
             )
@@ -382,10 +403,10 @@ def list_atlases(keyword: str = "", limit: int = 12) -> list[dict[str, Any]]:
     params: list[Any] = []
     if keyword.strip():
         query += """
-            WHERE title LIKE ? OR author_name LIKE ? OR tags LIKE ? OR source_url LIKE ?
+            WHERE title LIKE ? OR author_name LIKE ? OR tags LIKE ? OR source_url LIKE ? OR cat_profile_json LIKE ?
         """
         fuzzy = f"%{keyword.strip()}%"
-        params.extend([fuzzy, fuzzy, fuzzy, fuzzy])
+        params.extend([fuzzy, fuzzy, fuzzy, fuzzy, fuzzy])
     query += " ORDER BY updated_at DESC LIMIT ?"
     params.append(limit)
 
@@ -436,6 +457,26 @@ def get_user_by_id(user_id: int) -> dict[str, Any] | None:
             (user_id,),
         ).fetchone()
     return dict(row) if row else None
+
+
+def authenticate_user(identity: str, password: str) -> dict[str, Any] | None:
+    cleaned = identity.strip()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, username, email, created_at, role, must_change_password, password
+            FROM users
+            WHERE (username = ? OR email = ?) AND role = 'user'
+            LIMIT 1
+            """,
+            (cleaned, cleaned),
+        ).fetchone()
+    if not row:
+        return None
+    user = dict(row)
+    if not verify_password(user.get("password", ""), password.strip()):
+        return None
+    return user
 
 
 def authenticate_admin(username: str, password: str) -> dict[str, Any] | None:
@@ -516,3 +557,84 @@ def list_comments(atlas_id: int) -> list[dict[str, Any]]:
             (atlas_id,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def upsert_rating(
+    atlas_id: int,
+    user_id: int,
+    happiness_score: int,
+    knowledge_score: int,
+    rhythm_score: int,
+    resonance_score: int,
+) -> None:
+    now = utcnow()
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO ratings (
+                atlas_id, user_id, happiness_score, knowledge_score, rhythm_score, resonance_score,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(atlas_id, user_id) DO UPDATE SET
+                happiness_score = excluded.happiness_score,
+                knowledge_score = excluded.knowledge_score,
+                rhythm_score = excluded.rhythm_score,
+                resonance_score = excluded.resonance_score,
+                updated_at = excluded.updated_at
+            """,
+            (
+                atlas_id,
+                user_id,
+                happiness_score,
+                knowledge_score,
+                rhythm_score,
+                resonance_score,
+                now,
+                now,
+            ),
+        )
+
+
+def get_user_rating(atlas_id: int, user_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT atlas_id, user_id, happiness_score, knowledge_score, rhythm_score, resonance_score, updated_at
+            FROM ratings
+            WHERE atlas_id = ? AND user_id = ?
+            """,
+            (atlas_id, user_id),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_rating_summary(atlas_id: int) -> dict[str, Any]:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                COUNT(*) AS rating_count,
+                AVG(happiness_score) AS avg_happiness_score,
+                AVG(knowledge_score) AS avg_knowledge_score,
+                AVG(rhythm_score) AS avg_rhythm_score,
+                AVG(resonance_score) AS avg_resonance_score
+            FROM ratings
+            WHERE atlas_id = ?
+            """,
+            (atlas_id,),
+        ).fetchone()
+    if not row:
+        return {
+            "rating_count": 0,
+            "avg_happiness_score": 0,
+            "avg_knowledge_score": 0,
+            "avg_rhythm_score": 0,
+            "avg_resonance_score": 0,
+        }
+    return {
+        "rating_count": int(row["rating_count"] or 0),
+        "avg_happiness_score": round(float(row["avg_happiness_score"] or 0), 1),
+        "avg_knowledge_score": round(float(row["avg_knowledge_score"] or 0), 1),
+        "avg_rhythm_score": round(float(row["avg_rhythm_score"] or 0), 1),
+        "avg_resonance_score": round(float(row["avg_resonance_score"] or 0), 1),
+    }

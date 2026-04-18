@@ -125,6 +125,55 @@
                 {% endif %}
             </aside>
         </section>
+
+        <section class="dashboard-grid admin-grid">
+            <div class="content-card">
+                <div class="section-title-row">
+                    <h2>提示词信息</h2>
+                    <span class="section-hint">仅管理员可见，用于查看当前图鉴链路中的提示词与模型输入产物</span>
+                </div>
+                {% if prompt_examples %}
+                <div class="prompt-example-list">
+                    {% for item in prompt_examples %}
+                    <div class="info-panel">
+                        <h3>{{ item.cat_name }} / {{ item.title }}</h3>
+                        <p class="section-hint">Prompt Scaffold</p>
+                        <pre>{{ item.prompt_scaffold or "当前还没有 Prompt Scaffold" }}</pre>
+                        <p class="section-hint prompt-gap">模型3绘图提示词</p>
+                        <pre>{{ item.image_prompt or "当前还没有绘图提示词" }}</pre>
+                        <div class="action-row">
+                            <a class="ghost-btn" href="/atlas/{{ item.id }}">查看图鉴</a>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state compact">当前没有可展示的提示词样例。</div>
+                {% endif %}
+            </div>
+
+            <aside class="content-card side-card">
+                <div class="section-title-row">
+                    <h2>最近注册</h2>
+                    <span class="section-hint">用户注册信息仅在管理员后台展示</span>
+                </div>
+                {% if recent_users %}
+                <div class="user-list">
+                    {% for user in recent_users %}
+                    <div class="user-item">
+                        <div>
+                            <strong>{{ user.username }}</strong>
+                            <p>{{ user.email }}</p>
+                        </div>
+                        <span>{{ user.created_at[:10] }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state compact">暂无注册用户。</div>
+                {% endif %}
+            </aside>
+        </section>
     </div>
 </body>
 </html>

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="referrer" content="no-referrer">
+    <title>猫咪图鉴 - vid2cat</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="top-nav plain-nav">
+            <a class="brand" href="/">vid2cat</a>
+            <div class="nav-actions">
+                <a class="ghost-btn" href="/">抖音解析</a>
+                <a class="ghost-btn active-tab" href="/atlases">图鉴列表</a>
+                <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+                {% if current_user %}
+                <span class="user-badge">已登录：{{ current_user.username }}</span>
+                <a class="ghost-btn" href="/logout">退出</a>
+                {% else %}
+                <a class="ghost-btn" href="/login">登录</a>
+                <a class="ghost-btn" href="/register">注册</a>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if message %}
+        <div class="notice success">{{ message }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="notice error">{{ error }}</div>
+        {% endif %}
+
+        <section class="hero-card compact-hero">
+            <div class="section-title-row">
+                <div>
+                    <p class="eyebrow">猫咪图鉴馆</p>
+                    <h1>浏览 AI 生成的猫咪图鉴</h1>
+                </div>
+                <span class="section-hint">列表只展示猫咪名字、品种和猫图，详细信息点击进入</span>
+            </div>
+            <form class="search-form" action="/atlases" method="get">
+                <div class="input-group">
+                    <input type="text" name="q" value="{{ query }}" placeholder="搜索猫咪名字、品种、标签或原视频标题">
+                    <button class="primary-btn" type="submit">搜索图鉴</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="content-card">
+            <div class="section-title-row">
+                <h2>图鉴列表</h2>
+                <span class="section-hint">仅展示猫咪名字、品种和 AI 生成图，详细内容点击进入</span>
+            </div>
+            {% if atlas_cards %}
+            <div class="atlas-grid">
+                {% for atlas in atlas_cards %}
+                <article class="atlas-card atlas-gallery-card">
+                    <div class="atlas-cover {% if not atlas.image_url %}placeholder-cover{% endif %}">
+                        {% if atlas.image_url %}
+                        <img src="{{ atlas.image_url }}" alt="{{ atlas.cat_name }}">
+                        {% else %}
+                        <span>{{ atlas.cat_name[:2] }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="atlas-body">
+                        <span class="tag">{{ atlas.rarity }}</span>
+                        <h3>{{ atlas.cat_name }}</h3>
+                        <p class="atlas-subtitle">{{ atlas.breed }}</p>
+                        <p>{{ atlas.summary }}</p>
+                        <div class="action-row atlas-card-actions">
+                            <a class="ghost-btn" href="/atlas/{{ atlas.id }}">查看详情</a>
+                        </div>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">当前没有找到匹配的图鉴，可以先到“抖音搜索”页生成一个。</div>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>

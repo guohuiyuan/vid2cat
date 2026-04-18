@@ -78,6 +78,42 @@ def score_from_text(*parts: str) -> tuple[int, int, int, int]:
     return hot, rhythm, knowledge, resonance
 
 
+def build_fallback_model1_analysis(
+    title: str,
+    description: str,
+    tags: list[str],
+    hot: int,
+    knowledge: int,
+    rhythm: int,
+    resonance: int,
+) -> dict[str, Any]:
+    happiness = max(60, min(98, round((hot + rhythm) / 2)))
+    return {
+        "total_score": hot,
+        "happiness_score": happiness,
+        "knowledge_score": knowledge,
+        "rhythm_score": rhythm,
+        "resonance_score": resonance,
+        "key_moments": [
+            {"time_range": "0-3秒", "summary": "开头需要更强的钩子，适合突出最有记忆点的角色或动作。"},
+            {"time_range": "3-10秒", "summary": "中段承担信息展开和节奏推进，适合强化主题与情绪。"},
+            {"time_range": "10秒后", "summary": "结尾适合补评论引导或收藏理由，延长传播尾效。"},
+        ],
+        "full_summary": description or f"视频《{title}》已经完成基础解析，适合进一步做成猫咪图鉴。",
+        "optimization_tips": [
+            "增强前三秒钩子",
+            "突出角色辨识度与主题记忆点",
+            "在结尾增加互动问题或收藏引导",
+        ],
+        "tags": tags[:6] or ["抖音", "猫咪图鉴"],
+        "perspectives": {
+            "review": "内容表达偏安全，建议继续注意素材版权、角色使用和平台规范。",
+            "audience": "更容易被情绪记忆点和角色辨识度打动，建议强化互动感。",
+            "author": "选题方向有潜力，可继续优化封面、节奏和评论区转化设计。",
+        },
+    }
+
+
 def build_model_config(settings: dict[str, str], index: int) -> AIModelConfig:
     return AIModelConfig(
         api_url=settings.get(f"ai_model_{index}_api_url", "").strip(),
@@ -96,44 +132,69 @@ def generate_video_analysis_with_model1(
     config = build_model_config(settings, 1)
     system_prompt = (
         "你是短视频内容分析助手。请根据给定的抖音视频基础信息，"
-        "输出适合图鉴系统展示的精炼中文分析。"
+        "输出适合图鉴系统展示的结构化中文分析。只返回 JSON，不要输出额外说明。"
     )
     user_prompt = (
         f"标题：{title}\n"
         f"作者：{author_name}\n"
         f"描述：{description or title}\n"
         f"标签：{'、'.join(tags) or '抖音、猫咪图鉴'}\n\n"
-        "请严格按以下格式输出：\n"
-        "摘要：...\n"
-        "建议：...\n"
-        "标签：标签1、标签2、标签3\n"
+        "请返回 JSON，字段必须包含："
+        "total_score, happiness_score, knowledge_score, rhythm_score, resonance_score, "
+        "key_moments, full_summary, optimization_tips, tags, perspectives。\n"
+        "其中：\n"
+        "1. total_score 为 0-100 的总分\n"
+        "2. happiness_score / knowledge_score / rhythm_score / resonance_score 分别代表快乐、知识、节奏、共鸣\n"
+        "3. key_moments 为数组，每项包含 time_range 和 summary\n"
+        "4. optimization_tips 为字符串数组\n"
+        "5. tags 为字符串数组\n"
+        "6. perspectives 为对象，必须包含 review, audience, author 三个字段"
     )
     result = AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.5)
-    summary = ""
-    tips = ""
-    refined_tags: list[str] = []
-    for raw_line in result.splitlines():
-        line = raw_line.strip()
-        if not line:
+    data = json_repair.loads(result)
+    key_moments = data.get("key_moments") or []
+    normalized_key_moments = []
+    for item in key_moments[:6]:
+        if not isinstance(item, dict):
             continue
-        if line.startswith("摘要：") or line.startswith("摘要:"):
-            summary = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-        elif line.startswith("建议：") or line.startswith("建议:"):
-            tips = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-        elif line.startswith("标签：") or line.startswith("标签:"):
-            tag_text = line.split("：", 1)[-1].split(":", 1)[-1].strip()
-            refined_tags = [tag.strip() for tag in re.split(r"[、,，/]+", tag_text) if tag.strip()]
+        normalized_key_moments.append(
+            {
+                "time_range": str(item.get("time_range") or item.get("time") or "未标注"),
+                "summary": str(item.get("summary") or item.get("content") or ""),
+            }
+        )
+    refined_tags = [str(tag).strip() for tag in (data.get("tags") or []) if str(tag).strip()][:8]
+    optimization_tips = [str(tip).strip() for tip in (data.get("optimization_tips") or []) if str(tip).strip()][:8]
+    perspectives = data.get("perspectives") or {}
+    normalized = {
+        "total_score": int(data.get("total_score") or 75),
+        "happiness_score": int(data.get("happiness_score") or 72),
+        "knowledge_score": int(data.get("knowledge_score") or 68),
+        "rhythm_score": int(data.get("rhythm_score") or 70),
+        "resonance_score": int(data.get("resonance_score") or 75),
+        "key_moments": normalized_key_moments,
+        "full_summary": str(data.get("full_summary") or description or title),
+        "optimization_tips": optimization_tips,
+        "tags": refined_tags,
+        "perspectives": {
+            "review": str(perspectives.get("review") or ""),
+            "audience": str(perspectives.get("audience") or ""),
+            "author": str(perspectives.get("author") or ""),
+        },
+    }
     return {
-        "summary": summary or result[:220],
-        "tips": tips or "建议继续补充前三秒钩子、评论区问题和封面表达。",
+        "summary": normalized["full_summary"],
+        "tips": "；".join(optimization_tips) or "建议继续补充前三秒钩子、评论区问题和封面表达。",
         "tags": refined_tags[:6],
-        "raw": result,
+        "raw": json.dumps(normalized, ensure_ascii=False),
+        "structured": normalized,
     }
 
 
 def build_cat_profile(title: str, description: str, tags: list[str]) -> dict[str, str]:
     keyword = tags[0] if tags else "猫咪"
     return {
+        "name": f"{keyword}喵",
         "breed": "赛博短视频猫",
         "skill": f"{keyword}拟态",
         "power": str(82 + len(title) % 16),
@@ -159,11 +220,12 @@ def generate_cat_profile_with_model2(
         f"摘要：{summary}\n"
         f"标签：{'、'.join(tags) or '抖音、猫咪图鉴'}\n\n"
         "请返回 JSON，字段必须包含："
-        "breed, skill, power, personality, story, appearance, rarity, image_prompt。"
+        "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
     raw = AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.7)
     data = json_repair.loads(raw)
     profile = {
+        "name": str(data.get("name") or f"{(tags[0] if tags else '猫咪')}喵"),
         "breed": str(data.get("breed") or "赛博短视频猫"),
         "skill": str(data.get("skill") or "内容拟态"),
         "power": str(data.get("power") or "88"),
@@ -338,6 +400,15 @@ def build_atlas_from_router_data(
     duration_ms = int(deep_get(item, ["video", "duration"], 0) or 0)
     tags = [tag for tag in re.split(r"[#\s,，/]+", title) if tag][:6]
     hot, rhythm, knowledge, resonance = score_from_text(title, author_name, aweme_id)
+    fallback_model1 = build_fallback_model1_analysis(
+        title=title,
+        description=item.get("desc") or "",
+        tags=tags,
+        hot=hot,
+        knowledge=knowledge,
+        rhythm=rhythm,
+        resonance=resonance,
+    )
     summary = (
         f"已从抖音页面解析出基础元数据，适合作为视频图鉴雏形。标题为《{title}》，"
         "当前阶段先输出基础摘要、分数和猫咪人设草稿。"
@@ -346,9 +417,10 @@ def build_atlas_from_router_data(
         "建议补封面文案、前三秒强钩子和评论区互动问题；"
         "后续可接入全模态模型补充更细的镜头分析。"
     )
-    model1_output = ""
+    model1_output = json.dumps(fallback_model1, ensure_ascii=False)
     model2_output = ""
     model3_output = ""
+    happiness_score = fallback_model1["happiness_score"]
     if settings:
         try:
             model_result = generate_video_analysis_with_model1(
@@ -363,6 +435,12 @@ def build_atlas_from_router_data(
             if model_result["tags"]:
                 tags = model_result["tags"]
             model1_output = model_result["raw"]
+            structured = model_result["structured"]
+            hot = int(structured["total_score"])
+            happiness_score = int(structured["happiness_score"])
+            knowledge = int(structured["knowledge_score"])
+            rhythm = int(structured["rhythm_score"])
+            resonance = int(structured["resonance_score"])
         except Exception as exc:
             optimization_tips += f" 模型1调用失败，已回退到本地摘要。原因：{exc}"
     cat_profile = build_cat_profile(title, summary, tags)
@@ -402,6 +480,7 @@ def build_atlas_from_router_data(
         "tags": tags or ["抖音", "猫咪图鉴"],
         "status": "parsed",
         "hot_score": hot,
+        "happiness_score": happiness_score,
         "rhythm_score": rhythm,
         "knowledge_score": knowledge,
         "resonance_score": resonance,
@@ -446,6 +525,7 @@ def build_fallback_atlas(
         "tags": ["占位", "解析失败", "待接入"],
         "status": "fallback",
         "hot_score": hot,
+        "happiness_score": max(60, min(98, round((hot + rhythm) / 2))),
         "rhythm_score": rhythm,
         "knowledge_score": knowledge,
         "resonance_score": resonance,
@@ -517,3 +597,43 @@ def parse_cat_profile(raw: str) -> dict[str, str]:
     except json.JSONDecodeError:
         return {}
     return {str(key): str(value) for key, value in data.items()}
+
+
+def parse_model1_analysis(raw: str) -> dict[str, Any]:
+    if not raw.strip():
+        return {}
+    try:
+        data = json_repair.loads(raw)
+    except Exception:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    key_moments = []
+    for item in data.get("key_moments") or []:
+        if not isinstance(item, dict):
+            continue
+        summary = str(item.get("summary") or "").strip()
+        if not summary:
+            continue
+        key_moments.append(
+            {
+                "time_range": str(item.get("time_range") or "未标注"),
+                "summary": summary,
+            }
+        )
+    return {
+        "total_score": int(data.get("total_score") or 0),
+        "happiness_score": int(data.get("happiness_score") or 0),
+        "knowledge_score": int(data.get("knowledge_score") or 0),
+        "rhythm_score": int(data.get("rhythm_score") or 0),
+        "resonance_score": int(data.get("resonance_score") or 0),
+        "key_moments": key_moments,
+        "full_summary": str(data.get("full_summary") or "").strip(),
+        "optimization_tips": [str(t).strip() for t in (data.get("optimization_tips") or []) if str(t).strip()],
+        "tags": [str(t).strip() for t in (data.get("tags") or []) if str(t).strip()],
+        "perspectives": {
+            "review": str((data.get("perspectives") or {}).get("review") or "").strip(),
+            "audience": str((data.get("perspectives") or {}).get("audience") or "").strip(),
+            "author": str((data.get("perspectives") or {}).get("author") or "").strip(),
+        },
+    }
