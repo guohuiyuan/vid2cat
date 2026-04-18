@@ -83,7 +83,9 @@ def get_connection() -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
-def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+def ensure_column(
+    conn: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
     rows = conn.execute(f"PRAGMA table_info({table})").fetchall()
     existing = {row["name"] for row in rows}
     if column not in existing:
@@ -250,7 +252,9 @@ def init_db() -> None:
             """
         )
         ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
-        ensure_column(conn, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(
+            conn, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0"
+        )
         ensure_column(conn, "users", "is_guest", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "atlases", "happiness_score", "INTEGER NOT NULL DEFAULT 70")
         ensure_column(conn, "atlases", "model1_output", "TEXT")
@@ -261,26 +265,49 @@ def init_db() -> None:
         ensure_column(conn, "ratings", "total_score", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "cats", "is_active", "INTEGER NOT NULL DEFAULT 1")
         ensure_column(conn, "cats", "is_public", "INTEGER NOT NULL DEFAULT 0")
-        ensure_column(conn, "cats", "available_for_adoption", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(
+            conn, "cats", "available_for_adoption", "INTEGER NOT NULL DEFAULT 0"
+        )
         ensure_column(conn, "cats", "released_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "cats", "final_persona_json", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "cats", "level", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "cats", "exp", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "cats", "exp_to_next", "INTEGER NOT NULL DEFAULT 100")
         ensure_column(conn, "cats", "learned_skills_json", "TEXT NOT NULL DEFAULT '[]'")
-        ensure_column(conn, "cats", "highest_level_owner_id", "INTEGER NOT NULL DEFAULT 0")
-        ensure_column(conn, "cats", "highest_level_owner_name", "TEXT NOT NULL DEFAULT ''")
-        ensure_column(conn, "cats", "highest_level_reached", "INTEGER NOT NULL DEFAULT 0")
-        ensure_column(conn, "cat_feed_records", "learned_skill", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(
+            conn, "cats", "highest_level_owner_id", "INTEGER NOT NULL DEFAULT 0"
+        )
+        ensure_column(
+            conn, "cats", "highest_level_owner_name", "TEXT NOT NULL DEFAULT ''"
+        )
+        ensure_column(
+            conn, "cats", "highest_level_reached", "INTEGER NOT NULL DEFAULT 0"
+        )
+        ensure_column(
+            conn, "cat_feed_records", "learned_skill", "TEXT NOT NULL DEFAULT ''"
+        )
 
         # 迁移：移除 cats 表 user_id 的 UNIQUE 约束 (SQLite 需要通过重建表实现)
         rows = conn.execute("PRAGMA table_info(cats)").fetchall()
         if rows:
             indexes = conn.execute("PRAGMA index_list(cats)").fetchall()
-            has_unique_userid = any(idx["unique"] == 1 and "user_id" in [info["name"] for info in conn.execute(f"PRAGMA index_info({idx['name']})").fetchall()] for idx in indexes)
+            has_unique_userid = any(
+                idx["unique"] == 1
+                and "user_id"
+                in [
+                    info["name"]
+                    for info in conn.execute(
+                        f"PRAGMA index_info({idx['name']})"
+                    ).fetchall()
+                ]
+                for idx in indexes
+            )
             if has_unique_userid:
                 rebuild_cats_table_without_user_unique(conn)
-            conn.execute("UPDATE cats SET max_feed_count = ? WHERE max_feed_count != ?", (MAX_CAT_LEVEL, MAX_CAT_LEVEL))
+            conn.execute(
+                "UPDATE cats SET max_feed_count = ? WHERE max_feed_count != ?",
+                (MAX_CAT_LEVEL, MAX_CAT_LEVEL),
+            )
             conn.execute(
                 """
                 UPDATE cats
@@ -825,7 +852,9 @@ def parse_skill_list(raw: str) -> list[dict[str, str]]:
     cleaned: list[dict[str, str]] = []
     for item in data:
         if isinstance(item, dict) and "name" in item:
-            cleaned.append({"name": str(item["name"]), "rarity": str(item.get("rarity", "N"))})
+            cleaned.append(
+                {"name": str(item["name"]), "rarity": str(item.get("rarity", "N"))}
+            )
         elif isinstance(item, str) and item.strip():
             cleaned.append({"name": item.strip(), "rarity": "N"})
     return cleaned
@@ -835,13 +864,20 @@ def dump_skill_list(skills: list[dict[str, str]]) -> str:
     cleaned = []
     for skill in skills:
         if isinstance(skill, dict) and "name" in skill and str(skill["name"]).strip():
-            cleaned.append({"name": str(skill["name"]).strip(), "rarity": str(skill.get("rarity", "N"))})
+            cleaned.append(
+                {
+                    "name": str(skill["name"]).strip(),
+                    "rarity": str(skill.get("rarity", "N")),
+                }
+            )
         elif isinstance(skill, str) and str(skill).strip():
             cleaned.append({"name": str(skill).strip(), "rarity": "N"})
     return json.dumps(cleaned, ensure_ascii=False)
 
 
-def build_cat_stage(level: int, feed_count: int, max_feed_count: int, available_for_adoption: int = 0) -> str:
+def build_cat_stage(
+    level: int, feed_count: int, max_feed_count: int, available_for_adoption: int = 0
+) -> str:
     if int(available_for_adoption):
         return "待领养"
     if int(level) >= MAX_CAT_LEVEL or int(feed_count) >= int(max_feed_count):
@@ -861,7 +897,9 @@ def compute_overall_power(
     return wisdom + grit + creativity + agility + cooperation
 
 
-def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_initial_cat_payload(
+    user_id: int, username: str, ai_data: dict[str, Any] | None = None
+) -> dict[str, Any]:
     now = utcnow()
     base_name = (username.strip() or "新手")[:8]
     wisdom = grit = creativity = agility = cooperation = 50
@@ -882,10 +920,14 @@ def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, An
         "creativity": creativity,
         "agility": agility,
         "cooperation": cooperation,
-        "overall_power": compute_overall_power(wisdom, grit, creativity, agility, cooperation),
+        "overall_power": compute_overall_power(
+            wisdom, grit, creativity, agility, cooperation
+        ),
         "image_url": ai_data.get("image_url") if ai_data else "",
-        "personality": profile.get("personality") or "亲人、好奇、会观察主人的心情，正等待第一条抖音链接来塑造自己。",
-        "story_summary": profile.get("story") or "这是一只刚刚被领取的小猫，它想慢慢长成最懂主人的那个陪伴者。",
+        "personality": profile.get("personality")
+        or "亲人、好奇、会观察主人的心情，正等待第一条抖音链接来塑造自己。",
+        "story_summary": profile.get("story")
+        or "这是一只刚刚被领取的小猫，它想慢慢长成最懂主人的那个陪伴者。",
         "latest_summary": "还没有喂过抖音链接，先试着喂第一条吧。",
         "is_active": 1,
         "is_public": 0,
@@ -899,7 +941,9 @@ def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, An
     }
 
 
-def create_initial_cat_for_user(user_id: int, username: str, ai_data: dict[str, Any] | None = None) -> dict[str, Any]:
+def create_initial_cat_for_user(
+    user_id: int, username: str, ai_data: dict[str, Any] | None = None
+) -> dict[str, Any]:
     payload = build_initial_cat_payload(user_id, username, ai_data)
     with get_connection() as conn:
         conn.execute(
@@ -953,7 +997,9 @@ def list_user_cats(user_id: int, limit: int = 10) -> list[dict[str, Any]]:
 
 def get_cat_by_id(cat_id: int) -> dict[str, Any] | None:
     with get_connection() as conn:
-        row = conn.execute("SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)).fetchone()
+        row = conn.execute(
+            "SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)
+        ).fetchone()
     return dict(row) if row else None
 
 
@@ -1006,7 +1052,9 @@ def activate_cat_for_user(user_id: int, cat_id: int) -> dict[str, Any] | None:
     return get_cat_by_id(cat_id)
 
 
-def ensure_user_cat(user_id: int, username: str, settings: dict[str, str] | None = None) -> dict[str, Any]:
+def ensure_user_cat(
+    user_id: int, username: str, settings: dict[str, str] | None = None
+) -> dict[str, Any]:
     cat = get_user_cat(user_id)
     if cat:
         return cat
@@ -1021,6 +1069,7 @@ def ensure_user_cat(user_id: int, username: str, settings: dict[str, str] | None
     ai_data = None
     if settings:
         from .services import generate_initial_cat_ai_data
+
         try:
             ai_data = generate_initial_cat_ai_data(settings, username)
         except Exception:
@@ -1061,37 +1110,47 @@ def list_cat_timeline(cat_id: int, limit: int = 20) -> list[dict[str, Any]]:
 
     timeline = []
     for f in feeds:
-        timeline.append({
-            "event_type": "feed",
-            "time": f["created_at"],
-            "title": f"视频投喂：{f.get('video_title', '未命名')}",
-            "summary": f.get("video_summary", ""),
-            "data": dict(f)
-        })
+        timeline.append(
+            {
+                "event_type": "feed",
+                "time": f["created_at"],
+                "title": f"视频投喂：{f.get('video_title', '未命名')}",
+                "summary": f.get("video_summary", ""),
+                "data": dict(f),
+            }
+        )
     for t in trains:
-        timeline.append({
-            "event_type": "train",
-            "time": t["created_at"],
-            "title": f"日常修炼：{t.get('action_key', '')}",
-            "summary": t.get("summary", ""),
-            "data": dict(t)
-        })
+        timeline.append(
+            {
+                "event_type": "train",
+                "time": t["created_at"],
+                "title": f"日常修炼：{t.get('action_key', '')}",
+                "summary": t.get("summary", ""),
+                "data": dict(t),
+            }
+        )
 
     timeline.sort(key=lambda x: x["time"], reverse=True)
     return timeline[:limit]
 
 
-def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_name: str = "") -> dict[str, Any]:
+def add_cat_feed_record(
+    cat_id: int, feed_result: dict[str, Any], current_owner_name: str = ""
+) -> dict[str, Any]:
     now = utcnow()
     with get_connection() as conn:
-        cat_row = conn.execute("SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)).fetchone()
+        cat_row = conn.execute(
+            "SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)
+        ).fetchone()
         if not cat_row:
             raise ValueError("猫咪不存在")
         cat = dict(cat_row)
         next_feed_count = int(cat["feed_count"]) + 1
         max_feeds = int(cat["max_feed_count"])
         if next_feed_count > max_feeds:
-            raise ValueError(f"这只猫已经喂满了 {max_feeds} 次，无法继续喂食，但可以继续对话。")
+            raise ValueError(
+                f"这只猫已经喂满了 {max_feeds} 次，无法继续喂食，但可以继续对话。"
+            )
         current_level = int(cat.get("level") or 0)
         if current_level >= MAX_CAT_LEVEL:
             raise ValueError("这只猫已经满级，不能继续喂养视频。")
@@ -1101,11 +1160,21 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_
             raise ValueError("经验条还没满，先完成日常修炼，再喂视频让它升级。")
 
         updated_stats = {
-            "wisdom": clamp_stat(int(cat["wisdom"]) + int(feed_result.get("wisdom_delta") or 0)),
-            "grit": clamp_stat(int(cat["grit"]) + int(feed_result.get("grit_delta") or 0)),
-            "creativity": clamp_stat(int(cat["creativity"]) + int(feed_result.get("creativity_delta") or 0)),
-            "agility": clamp_stat(int(cat["agility"]) + int(feed_result.get("agility_delta") or 0)),
-            "cooperation": clamp_stat(int(cat["cooperation"]) + int(feed_result.get("cooperation_delta") or 0)),
+            "wisdom": clamp_stat(
+                int(cat["wisdom"]) + int(feed_result.get("wisdom_delta") or 0)
+            ),
+            "grit": clamp_stat(
+                int(cat["grit"]) + int(feed_result.get("grit_delta") or 0)
+            ),
+            "creativity": clamp_stat(
+                int(cat["creativity"]) + int(feed_result.get("creativity_delta") or 0)
+            ),
+            "agility": clamp_stat(
+                int(cat["agility"]) + int(feed_result.get("agility_delta") or 0)
+            ),
+            "cooperation": clamp_stat(
+                int(cat["cooperation"]) + int(feed_result.get("cooperation_delta") or 0)
+            ),
         }
         overall_power = compute_overall_power(
             updated_stats["wisdom"],
@@ -1125,17 +1194,20 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_
             except Exception:
                 learned_skill_obj = {"name": learned_skill_raw, "rarity": "N"}
                 learned_skill_name = learned_skill_raw
-                
+
         if learned_skill_obj and learned_skill_name:
             if not any(s.get("name") == learned_skill_name for s in learned_skills):
                 learned_skills.append(learned_skill_obj)
-                
+
         next_level = min(MAX_CAT_LEVEL, current_level + 1)
         next_exp = 0
         next_exp_to_next = compute_exp_to_next(next_level)
         owner_name = current_owner_name.strip()
         if not owner_name:
-            owner_row = conn.execute("SELECT username FROM users WHERE id = ? LIMIT 1", (int(cat["user_id"]),)).fetchone()
+            owner_row = conn.execute(
+                "SELECT username FROM users WHERE id = ? LIMIT 1",
+                (int(cat["user_id"]),),
+            ).fetchone()
             owner_name = str((owner_row["username"] if owner_row else "") or "")
         highest_level_reached = int(cat.get("highest_level_reached") or 0)
         highest_level_owner_id = int(cat.get("highest_level_owner_id") or 0)
@@ -1144,8 +1216,16 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_
             highest_level_reached = next_level
             highest_level_owner_id = int(cat["user_id"])
             highest_level_owner_name = owner_name
-        stage = build_cat_stage(next_level, next_feed_count, max_feeds, int(cat.get("available_for_adoption") or 0))
-        latest_summary = str(feed_result.get("video_summary") or "").strip() or "这次喂养让它完成了一次新的突破。"
+        stage = build_cat_stage(
+            next_level,
+            next_feed_count,
+            max_feeds,
+            int(cat.get("available_for_adoption") or 0),
+        )
+        latest_summary = (
+            str(feed_result.get("video_summary") or "").strip()
+            or "这次喂养让它完成了一次新的突破。"
+        )
         if learned_skill_name:
             latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级，并学会技能「{learned_skill_name}」。"
         else:
@@ -1235,7 +1315,9 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
         raise ValueError("未知的修炼方式")
     now = utcnow()
     with get_connection() as conn:
-        cat_row = conn.execute("SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)).fetchone()
+        cat_row = conn.execute(
+            "SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)
+        ).fetchone()
         if not cat_row:
             raise ValueError("猫咪不存在")
         cat = dict(cat_row)
@@ -1248,7 +1330,7 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
         latest_summary = f"{action['label']}完成，获得 {int(action['exp_gain'])} 点经验。{action['summary']}"
         if new_exp >= exp_to_next:
             latest_summary += f" 当前经验已满，可以喂第 {int(cat.get('feed_count') or 0) + 1} 个视频了。"
-        
+
         conn.execute(
             """
             INSERT INTO cat_training_records (cat_id, action_key, exp_gain, summary, created_at)
@@ -1256,7 +1338,7 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
             """,
             (cat_id, action["label"], int(action["exp_gain"]), latest_summary, now),
         )
-        
+
         conn.execute(
             """
             UPDATE cats
@@ -1274,7 +1356,9 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
         "cat": updated_cat,
         "action": action,
         "exp_gain": int(action["exp_gain"]),
-        "exp_full": int(updated_cat.get("exp") or 0) >= int(updated_cat.get("exp_to_next") or 0) > 0,
+        "exp_full": int(updated_cat.get("exp") or 0)
+        >= int(updated_cat.get("exp_to_next") or 0)
+        > 0,
     }
 
 
@@ -1352,7 +1436,9 @@ def update_user_password(user_id: int, new_password: str) -> None:
 
 def get_settings() -> dict[str, str]:
     with get_connection() as conn:
-        rows = conn.execute("SELECT key, value FROM app_settings ORDER BY key").fetchall()
+        rows = conn.execute(
+            "SELECT key, value FROM app_settings ORDER BY key"
+        ).fetchall()
     settings = DEFAULT_SETTINGS.copy()
     settings.update({row["key"]: row["value"] for row in rows})
     return settings
@@ -1594,7 +1680,7 @@ def update_cat_final_persona(
     image_url: str,
     personality: str,
     story: str,
-    stage: str = '已完结',
+    stage: str = "已完结",
 ) -> None:
     with get_connection() as conn:
         conn.execute(

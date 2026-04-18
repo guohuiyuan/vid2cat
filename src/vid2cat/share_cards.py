@@ -40,7 +40,9 @@ def render_cat_share_card(
     logo = _load_logo()
     rarity = _resolve_rarity(cat)
 
-    draw.rounded_rectangle((48, 40, CARD_WIDTH - 48, CARD_HEIGHT - 40), radius=44, fill="#fffaf4")
+    draw.rounded_rectangle(
+        (48, 40, CARD_WIDTH - 48, CARD_HEIGHT - 40), radius=44, fill="#fffaf4"
+    )
     draw.text((84, 84), "VID2CAT", fill="#1f5fae", font=title_font)
     draw.text((84, 154), "猫咪分享卡", fill="#f08a2c", font=subtitle_font)
     if logo:
@@ -52,7 +54,9 @@ def render_cat_share_card(
     _draw_rarity_badge(draw, rarity, badge_font)
 
     draw.rounded_rectangle((84, 862, 996, 1118), radius=32, fill="#fff1df")
-    draw.text((118, 900), str(cat.get("name") or "未命名猫咪"), fill="#4f2b15", font=name_font)
+    draw.text(
+        (118, 900), str(cat.get("name") or "未命名猫咪"), fill="#4f2b15", font=name_font
+    )
 
     meta_items = [
         f"阶段 {cat.get('stage') or '初始态'}",
@@ -69,8 +73,14 @@ def render_cat_share_card(
     _draw_qr_block(canvas, draw, qr_box, site_url, small_font)
 
     draw.text((84, 1168), "猫咪档案", fill="#4f2b15", font=section_font)
-    summary = str(cat.get("story_summary") or cat.get("personality") or "这只小猫正在等待新的成长故事。").strip()
-    _draw_wrapped_text(draw, summary, (84, 1212), 590, body_font, "#6f4d38", line_spacing=14)
+    summary = str(
+        cat.get("story_summary")
+        or cat.get("personality")
+        or "这只小猫正在等待新的成长故事。"
+    ).strip()
+    _draw_wrapped_text(
+        draw, summary, (84, 1212), 590, body_font, "#6f4d38", line_spacing=14
+    )
 
     output = BytesIO()
     canvas.save(output, format="PNG")
@@ -85,12 +95,19 @@ def _paint_background(draw: ImageDraw.ImageDraw) -> None:
     draw.ellipse((-180, 1050, 360, 1600), fill="#e4f5e7")
 
 
-def _draw_tag_row(draw: ImageDraw.ImageDraw, tags: list[str], origin: tuple[int, int], font: ImageFont.ImageFont) -> None:
+def _draw_tag_row(
+    draw: ImageDraw.ImageDraw,
+    tags: list[str],
+    origin: tuple[int, int],
+    font: ImageFont.ImageFont,
+) -> None:
     x, y = origin
     for tag in tags:
         box = draw.textbbox((0, 0), tag, font=font)
         width = box[2] - box[0]
-        draw.rounded_rectangle((x, y, x + width + 28, y + 48), radius=20, fill="#ffffff")
+        draw.rounded_rectangle(
+            (x, y, x + width + 28, y + 48), radius=20, fill="#ffffff"
+        )
         draw.text((x + 14, y + 8), tag, fill="#5f4737", font=font)
         x += width + 42
 
@@ -151,7 +168,9 @@ def _draw_qr_block(
     label_font: ImageFont.ImageFont,
 ) -> None:
     left, top, right, bottom = qr_box
-    draw.rounded_rectangle((left - 26, top - 26, right + 26, bottom + 96), radius=32, fill="#ffffff")
+    draw.rounded_rectangle(
+        (left - 26, top - 26, right + 26, bottom + 96), radius=32, fill="#ffffff"
+    )
     qr = qrcode.QRCode(border=2, box_size=10)
     qr.add_data(site_url or DEFAULT_SITE_URL)
     qr.make(fit=True)
@@ -160,7 +179,9 @@ def _draw_qr_block(
     canvas.paste(qr_image, (left, top))
 
 
-def _draw_rarity_badge(draw: ImageDraw.ImageDraw, rarity: str, font: ImageFont.ImageFont) -> None:
+def _draw_rarity_badge(
+    draw: ImageDraw.ImageDraw, rarity: str, font: ImageFont.ImageFont
+) -> None:
     fill, bg = RARITY_COLORS.get(rarity, RARITY_COLORS["N"])
     points = [(842, 240), (996, 240), (996, 392)]
     draw.polygon(points, fill=fill)
@@ -172,7 +193,11 @@ def _draw_rarity_badge(draw: ImageDraw.ImageDraw, rarity: str, font: ImageFont.I
 def _resolve_rarity(cat: dict[str, Any]) -> str:
     rarity_order = ["SSR", "SR", "R", "N"]
     skills = cat.get("learned_skills") or []
-    skill_rarities = [str(skill.get("rarity") or "N").upper() for skill in skills if isinstance(skill, dict)]
+    skill_rarities = [
+        str(skill.get("rarity") or "N").upper()
+        for skill in skills
+        if isinstance(skill, dict)
+    ]
     explicit = str(cat.get("rarity") or "").upper()
     candidates = [explicit, *skill_rarities]
     for rarity in rarity_order:
@@ -181,7 +206,9 @@ def _resolve_rarity(cat: dict[str, Any]) -> str:
     return "N"
 
 
-def _load_cat_image(image_url: str, image_box: tuple[int, int, int, int]) -> Image.Image:
+def _load_cat_image(
+    image_url: str, image_box: tuple[int, int, int, int]
+) -> Image.Image:
     width = image_box[2] - image_box[0]
     height = image_box[3] - image_box[1]
     image = None
@@ -208,11 +235,27 @@ def _build_placeholder(width: int, height: int) -> Image.Image:
     image = Image.new("RGB", (width, height), "#fff4e8")
     draw = ImageDraw.Draw(image)
     draw.rounded_rectangle((0, 0, width, height), radius=40, fill="#fff4e8")
-    draw.ellipse((width * 0.18, height * 0.12, width * 0.82, height * 0.76), fill="#ffd59f")
-    draw.ellipse((width * 0.3, height * 0.28, width * 0.42, height * 0.4), fill="#5b3219")
-    draw.ellipse((width * 0.58, height * 0.28, width * 0.7, height * 0.4), fill="#5b3219")
-    draw.rounded_rectangle((width * 0.4, height * 0.44, width * 0.6, height * 0.5), radius=20, fill="#f4978e")
-    draw.arc((width * 0.34, height * 0.44, width * 0.66, height * 0.64), start=15, end=165, fill="#8b4c2f", width=6)
+    draw.ellipse(
+        (width * 0.18, height * 0.12, width * 0.82, height * 0.76), fill="#ffd59f"
+    )
+    draw.ellipse(
+        (width * 0.3, height * 0.28, width * 0.42, height * 0.4), fill="#5b3219"
+    )
+    draw.ellipse(
+        (width * 0.58, height * 0.28, width * 0.7, height * 0.4), fill="#5b3219"
+    )
+    draw.rounded_rectangle(
+        (width * 0.4, height * 0.44, width * 0.6, height * 0.5),
+        radius=20,
+        fill="#f4978e",
+    )
+    draw.arc(
+        (width * 0.34, height * 0.44, width * 0.66, height * 0.64),
+        start=15,
+        end=165,
+        fill="#8b4c2f",
+        width=6,
+    )
     return image
 
 
@@ -230,9 +273,17 @@ def _load_font(size: int, bold: bool = False) -> ImageFont.ImageFont:
     candidates = [
         Path("C:/Windows/Fonts/msyhbd.ttc" if bold else "C:/Windows/Fonts/msyh.ttc"),
         Path("C:/Windows/Fonts/simhei.ttf"),
-        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc" if bold else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path(
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc"
+            if bold
+            else "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+        ),
         Path("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc"),
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf" if bold else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+        Path(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+            if bold
+            else "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+        ),
     ]
     for path in candidates:
         if path.exists():
