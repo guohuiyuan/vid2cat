@@ -22,13 +22,12 @@ RUN pip install --no-cache-dir uv
 
 COPY pyproject.toml uv.lock /app/
 COPY package.json package-lock.json /app/
+COPY src /app/src
+COPY scripts /app/scripts
 
 RUN uv export --format requirements-txt --output-file requirements.txt --frozen \
     && uv pip install --system --no-cache-dir -r requirements.txt \
     && npm ci --omit=dev
-
-COPY src /app/src
-COPY scripts /app/scripts
 
 RUN adduser --disabled-password --gecos '' appuser \
     && mkdir -p /app/data \
