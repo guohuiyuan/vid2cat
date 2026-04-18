@@ -55,7 +55,14 @@
                             <button type="submit" class="ghost-btn">切换到这只</button>
                         </form>
                         {% endif %}
-                        <a class="ghost-btn" href="/cats/{{ owned.id }}/share-card.png" target="_blank" rel="noopener noreferrer">预览卡</a>
+                        <button
+                            type="button"
+                            class="ghost-btn"
+                            data-preview-image="/cats/{{ owned.id }}/share-card.png"
+                            aria-label="预览 {{ owned.cat_name }} 的分享卡"
+                        >
+                            预览卡
+                        </button>
                         <button type="button" class="ghost-btn share-card-btn" data-share-card-id="{{ owned.id }}" data-share-card-name="{{ owned.cat_name }}">分享卡</button>
                     </div>
                 </article>
@@ -275,13 +282,9 @@
                                 <div class="quick-training-row">
                                     {% for action in training_actions %}
                                     <button
-                                        type="submit"
-                                        class="ghost-btn compact-btn"
-                                        formaction="/my-cat/train"
-                                        formmethod="post"
-                                        formnovalidate
-                                        name="action_key"
-                                        value="{{ action.key }}"
+                                        type="button"
+                                        class="ghost-btn compact-btn training-action-btn"
+                                        data-action-key="{{ action.key }}"
                                         title="{{ action.description }} (经验 +{{ action.exp_gain }})"
                                     >
                                         {{ action.label }}
@@ -310,7 +313,7 @@
                 <span class="section-hint">先选择品种和颜色；系统会基于预设提示词自动生成初始形象</span>
             </div>
         </div>
-        <form class="stack-form" action="/my-cat/adopt" method="POST">
+        <form class="stack-form" action="/my-cat/adopt" method="POST" data-adoption-form>
             <div class="adoption-grid">
                 <label>
                     <span>猫咪品种</span>
@@ -361,4 +364,29 @@
         </div>
     </section>
     {% endif %}
+
+    <div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="分享卡预览">
+        <div class="dialog-backdrop" data-close-preview></div>
+        <div class="unified-dialog-card image-preview-dialog">
+            <div class="dialog-header">
+                <div>
+                    <h3>分享卡预览</h3>
+                    <span class="section-hint">确认画面没问题后再分享</span>
+                </div>
+                <button type="button" class="ghost-btn dialog-close-btn" data-close-preview aria-label="关闭预览">&times;</button>
+            </div>
+            <div class="image-preview-body">
+                <img id="image-preview-target" src="" alt="猫咪分享卡预览图">
+            </div>
+        </div>
+    </div>
+
+    <div id="loading-overlay" class="dialog-overlay hidden" aria-hidden="true" role="status" aria-live="polite" aria-modal="true">
+        <div class="dialog-backdrop"></div>
+        <div class="unified-dialog-card loading-dialog">
+            <div class="loading-spinner" aria-hidden="true"></div>
+            <h3 id="loading-overlay-title">正在领养中...</h3>
+            <p id="loading-overlay-text">我们正在为你匹配猫咪并生成形象，请稍等片刻。</p>
+        </div>
+    </div>
 {% endblock %}

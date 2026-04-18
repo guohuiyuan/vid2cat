@@ -30,10 +30,10 @@
                 <h1>登录账号</h1>
                 <span class="section-hint">已有账号就登录继续养；如果只是想试试，也可以直接匿名开始</span>
             </div>
-            <form class="stack-form" action="/login" method="post">
+            <form class="stack-form auth-form" action="/login" method="post">
                 <input type="hidden" name="next" value="{{ next }}">
-                <input type="text" name="identity" placeholder="用户名或邮箱" required>
-                <input type="password" name="password" placeholder="密码" required>
+                <input class="form-input" type="text" name="identity" placeholder="用户名或邮箱" required>
+                <input class="form-input" type="password" name="password" placeholder="密码" required>
                 {% if current_user and current_user.is_guest %}
                 <label class="checkbox-row">
                     <input type="checkbox" name="takeover_guest" value="1" checked>

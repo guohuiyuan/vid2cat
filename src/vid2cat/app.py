@@ -544,7 +544,8 @@ def get_or_create_session_user(request: Request) -> dict[str, Any]:
     if not guest:
         raise HTTPException(status_code=500, detail="创建匿名用户失败")
     request.session["user_id"] = int(guest["id"])
-    request.session["show_growth_guide"] = True
+    if not request.session.get("growth_guide_seen"):
+        request.session["show_growth_guide"] = True
     return guest
 
 
@@ -634,7 +635,10 @@ def register_submit(
                 except Exception as exc:
                     return redirect_with_message("/register", error=str(exc))
             request.session["user_id"] = int(user["id"])
-            request.session["show_growth_guide"] = transferred <= 0
+            if transferred <= 0 and not request.session.get("growth_guide_seen"):
+                request.session["show_growth_guide"] = True
+            else:
+                request.session.pop("show_growth_guide", None)
         if transferred > 0:
             return redirect_with_message("/my-cat", message="注册成功，已自动接管当前游客进度")
         return redirect_with_message("/my-cat", message="注册成功，请先领养你的第一只猫")
@@ -691,7 +695,7 @@ def logout(request: Request):
     current_user = get_current_user(request)
     request.session.pop("user_id", None)
     if current_user and int(current_user.get("is_guest") or 0) == 1:
-        return redirect_with_message("/", message="已退出游客模式")
+        return redirect_with_message("/", message="已退出当前会话")
     return redirect_with_message("/", message="已退出登录")
 
 
@@ -734,10 +738,15 @@ def my_cat_page(
     skill_badges = build_skill_badges(cat) if cat else []
     training_actions = build_training_cards()
     can_feed, feed_gate_hint = get_feed_gate_status(cat)
-    show_growth_guide = bool(request.session.get("show_growth_guide")) and (
+    growth_guide_seen = bool(request.session.get("growth_guide_seen"))
+    show_growth_guide = (not growth_guide_seen) and bool(request.session.get("show_growth_guide")) and (
         cat is not None and owned_count == 1 and int(cat.get("feed_count") or 0) == 0
     )
-    if show_growth_guide or (cat and int(cat.get("feed_count") or 0) > 0):
+    if show_growth_guide:
+        request.session["growth_guide_seen"] = True
+        request.session.pop("show_growth_guide", None)
+    elif cat and int(cat.get("feed_count") or 0) > 0:
+        request.session["growth_guide_seen"] = True
         request.session.pop("show_growth_guide", None)
 
     return templates.TemplateResponse(

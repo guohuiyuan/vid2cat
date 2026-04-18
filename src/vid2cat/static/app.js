@@ -374,13 +374,16 @@ document.addEventListener("DOMContentLoaded", () => {
             .join("");
     };
 
-    const refreshCatPanel = async () => {
+    const refreshCatPanel = async (incomingCat = null) => {
         if (!interactionForm) return;
-        const refreshEndpoint = interactionForm.dataset.refreshEndpoint || "/api/my-cat/current";
-        const response = await fetch(refreshEndpoint);
-        const cat = await response.json();
-        if (!response.ok) {
-            throw new Error(cat.detail || "刷新猫咪状态失败");
+        let cat = incomingCat;
+        if (!cat) {
+            const refreshEndpoint = interactionForm.dataset.refreshEndpoint || "/api/my-cat/current";
+            const response = await fetch(refreshEndpoint);
+            cat = await response.json();
+            if (!response.ok) {
+                throw new Error(cat.detail || "刷新猫咪状态失败");
+            }
         }
 
         const avatarCard = document.getElementById("cat-avatar-card");
@@ -474,7 +477,7 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!response.ok) {
                 throw new Error(payload.detail || "修炼失败");
             }
-            await refreshCatPanel();
+            await refreshCatPanel(payload.cat || null);
             appendEventMessage(payload.message || "修炼完成", "done");
             setTaskStatus(payload.message || "修炼完成", "done");
         } catch (error) {
@@ -636,10 +639,6 @@ document.addEventListener("DOMContentLoaded", () => {
         updateInteractionUi();
 
         interactionForm.addEventListener("submit", async (event) => {
-            const submitter = event.submitter;
-            if (submitter && submitter.name === "action_key") {
-                return;
-            }
             event.preventDefault();
             const content = interactionInput.value.trim();
             if (!content) return;
@@ -765,7 +764,8 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     trainingButtons.forEach((button) => {
-        button.addEventListener("click", async () => {
+        button.addEventListener("click", async (event) => {
+            event.preventDefault();
             await submitTraining(button.dataset.actionKey, button);
         });
     });

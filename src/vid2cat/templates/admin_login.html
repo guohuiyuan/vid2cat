@@ -34,9 +34,9 @@
                 <p>默认密码：{{ default_admin_password }}</p>
                 <p>首次登录后会强制要求修改密码。</p>
             </div>
-            <form class="stack-form" action="/admin/login" method="post">
-                <input type="text" name="username" placeholder="管理员用户名" required value="{{ default_admin_username }}">
-                <input type="password" name="password" placeholder="管理员密码" required>
+            <form class="stack-form auth-form admin-auth-form" action="/admin/login" method="post">
+                <input class="form-input admin-form-input" type="text" name="username" placeholder="管理员用户名" required value="{{ default_admin_username }}">
+                <input class="form-input admin-form-input" type="password" name="password" placeholder="管理员密码" required>
                 <button class="primary-btn full-width" type="submit">登录后台</button>
             </form>
         </section>

@@ -30,20 +30,18 @@
                         {% endfor %}
                         {% else %}
                         {% if current_user.is_guest %}
-                        <a href="/register" class="menu-action-btn">注册保存进度</a>
-                        <a href="/login" class="menu-action-btn">登录已有账号</a>
+                        <a href="/login" class="menu-action-btn">登录 / 注册保存进度</a>
                         {% endif %}
                         {% if admin_user %}
                         <a href="/admin">后台管理</a>
                         {% endif %}
-                        <a href="/logout">{{ "退出游客模式" if current_user.is_guest else "退出登录" }}</a>
+                        <a href="/logout">{{ "退出当前会话" if current_user.is_guest else "退出登录" }}</a>
                         {% endif %}
                     </div>
                 </div>
                 {% else %}
                 <div class="nav-auth-actions">
-                    <a href="/login" class="ghost-btn">登录</a>
-                    <a href="/register" class="accent-btn">注册</a>
+                    <a href="/login" class="accent-btn">登录 / 注册</a>
                 </div>
                 {% endif %}
             </nav>
