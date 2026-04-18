@@ -198,10 +198,33 @@ def build_cat_profile(title: str, description: str, tags: list[str]) -> dict[str
         "breed": "赛博短视频猫",
         "skill": f"{keyword}拟态",
         "power": str(82 + len(title) % 16),
-        "personality": "灵动、会整活、擅长制造记忆点",
-        "story": f"它从视频《{title[:18]}》里学会了把内容翻译成猫咪图鉴语言。",
+        "personality": "亲人、机灵、带一点戏精感，擅长把内容灵感翻译成猫咪语言",
+        "story": f"它从视频《{title[:18]}》里学会了把内容灵感整理成自己的成长能量。",
         "rarity": "SSR" if len(description) % 2 == 0 else "SR",
     }
+
+
+def build_miaomiao_setting(
+    username: str = "",
+    breed: str = "",
+    color: str = "",
+    stage: str = "",
+) -> str:
+    owner_text = f"主人是 {username}。" if username.strip() else ""
+    breed_text = f"品种偏向 {breed}。" if breed.strip() else ""
+    color_text = f"毛色偏向 {color}。" if color.strip() else ""
+    stage_text = f"当前阶段是 {stage}。" if stage.strip() else ""
+    return (
+        "请把这只猫写成“喵喵系角色”：亲人、敏感、聪明、会观察主人的情绪，"
+        "有陪伴欲，也有一点嘴硬心软和小傲娇。"
+        "它喜欢把外界内容理解成自己的成长能量，说话自然，不要每句都重复“喵”，"
+        "但可以在关键句尾偶尔带一点猫咪口吻。"
+        "不要写成客服、助手或冷冰冰的设定，要像真正被主人养熟的小猫。"
+        + owner_text
+        + breed_text
+        + color_text
+        + stage_text
+    )
 
 
 def generate_cat_profile_with_model2(
@@ -213,12 +236,15 @@ def generate_cat_profile_with_model2(
     config = build_model_config(settings, 2)
     system_prompt = (
         "你是猫咪图鉴设定师。请根据视频摘要生成结构化猫咪人设。"
+        + build_miaomiao_setting(stage="图鉴态")
+        + " "
         "只返回 JSON，不要输出额外说明。"
     )
     user_prompt = (
         f"标题：{title}\n"
         f"摘要：{summary}\n"
         f"标签：{'、'.join(tags) or '抖音、猫咪图鉴'}\n\n"
+        "请让这只猫既有鲜明个性，也保留温暖陪伴感。\n"
         "请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
@@ -229,9 +255,9 @@ def generate_cat_profile_with_model2(
         "breed": str(data.get("breed") or "赛博短视频猫"),
         "skill": str(data.get("skill") or "内容拟态"),
         "power": str(data.get("power") or "88"),
-        "personality": str(data.get("personality") or "灵动、擅长表达"),
-        "story": str(data.get("story") or f"它从《{title[:18]}》里获得了新的舞台感。"),
-        "appearance": str(data.get("appearance") or "二次元猫咪造型，表情鲜明，色彩清爽。"),
+        "personality": str(data.get("personality") or "亲人、会接梗、观察力强，带一点小傲娇"),
+        "story": str(data.get("story") or f"它从《{title[:18]}》里获得了新的舞台感，也更懂得陪在主人身边。"),
+        "appearance": str(data.get("appearance") or "二次元猫咪造型，表情鲜明，眼神灵动，能看出陪伴感和故事感。"),
         "rarity": str(data.get("rarity") or "SR"),
         "image_prompt": str(data.get("image_prompt") or ""),
     }
@@ -669,8 +695,8 @@ def build_initial_adoption_prompt(username: str, breed: str, color: str) -> str:
     return (
         f"一只{selected_color}的{selected_breed}，动漫插画风格，"
         f"适合名字叫“{username}的小猫”的初始领养形象。"
-        "大眼睛，柔软毛发，半身或全身立绘，表情亲人，"
-        "画面干净，适合宠物养成卡片展示，高质量数字插画。"
+        "大眼睛，柔软毛发，半身或全身立绘，表情亲人，眼神机灵，"
+        "带一点“喵喵系”陪伴感，画面干净，适合宠物养成卡片展示，高质量数字插画。"
     )
 
 
@@ -688,6 +714,8 @@ def generate_initial_cat_ai_data(
     config2 = build_model_config(settings, 2)
     system_prompt2 = (
         "你是猫咪图鉴设定师。请为一个新领养的动漫猫生成初始人设。"
+        + build_miaomiao_setting(username=username, breed=selected_breed, color=selected_color, stage="初始领养")
+        + " "
         "只返回 JSON，不要输出额外说明。"
     )
     user_prompt2 = (
@@ -705,10 +733,10 @@ def generate_initial_cat_ai_data(
         "breed": str(data2.get("breed") or selected_breed),
         "skill": str(data2.get("skill") or "卖萌"),
         "power": str(data2.get("power") or "50"),
-        "personality": str(data2.get("personality") or "活泼可爱，充满好奇心。"),
-        "story": str(data2.get("story") or f"这是 {username} 领养的第一只{selected_color}{selected_breed}。"),
+        "personality": str(data2.get("personality") or "亲人、好奇、会悄悄观察主人的心情，偶尔嘴硬心软。"),
+        "story": str(data2.get("story") or f"这是 {username} 领养的第一只{selected_color}{selected_breed}，它正在学着成为最懂主人的小猫。"),
         "appearance": str(
-            data2.get("appearance") or f"一只{selected_color}的{selected_breed}，可爱的二次元小猫，大眼睛，毛茸茸。"
+            data2.get("appearance") or f"一只{selected_color}的{selected_breed}，可爱的二次元小猫，大眼睛，毛茸茸，神情亲近又机灵。"
         ),
         "rarity": str(data2.get("rarity") or "N"),
         "image_prompt": str(data2.get("image_prompt") or default_prompt),
@@ -739,6 +767,8 @@ def generate_final_cat_persona(
     system_prompt = (
         "你是猫咪图鉴设定师。请根据猫咪成长过程中吸收的视频内容摘要，"
         "生成它的“进阶/终局”形态设定。猫咪名字叫 " + cat_name + "。"
+        + build_miaomiao_setting(stage="成长终局")
+        + " "
         "只返回 JSON，不要输出额外说明。"
     )
     user_prompt = (
@@ -760,9 +790,9 @@ def generate_final_cat_persona(
         "breed": str(data.get("breed") or "进阶动漫猫"),
         "skill": str(data.get("skill") or "内容拟态"),
         "power": str(data.get("power") or "100"),
-        "personality": str(data.get("personality") or "性格正在变得丰富。"),
-        "story": str(data.get("story") or "在主人的陪伴下不断进化。"),
-        "appearance": str(data.get("appearance") or "更加精致的形象。"),
+        "personality": str(data.get("personality") or "更懂主人情绪，表达欲更强，温柔里带一点锋芒。"),
+        "story": str(data.get("story") or "在主人的陪伴和一次次喂养中，它长成了真正有故事的猫。"),
+        "appearance": str(data.get("appearance") or "更加精致成熟的形象，既保留亲近感，也带有成长后的独特气场。"),
         "rarity": str(data.get("rarity") or "SR"),
         "image_prompt": str(data.get("image_prompt") or ""),
     }
@@ -781,8 +811,11 @@ def generate_cat_response(
         f"你的背景故事是：{cat['story_summary']}。"
         f"你的当前状态：智慧={cat['wisdom']}, 毅力={cat['grit']}, "
         f"创造={cat['creativity']}, 灵敏={cat['agility']}, 协作={cat['cooperation']}。"
-        "请以猫咪的口吻和主人聊天。可以适当地卖萌，但要保持你的性格特色。"
-        "回复要简短亲切，不要输出任何 AI 助手的客套话。"
+        + build_miaomiao_setting(stage=str(cat.get("stage") or "成长中"))
+        + "请以猫咪的口吻和主人聊天。可以适当地卖萌，但要保持你的性格特色。"
+        + " "
+        "优先给出自然、有情绪、有陪伴感的回应，不要输出任何 AI 助手式客套话。"
+        "除非主人明确要求，否则不要长篇大论，不要解释系统或模型。"
     )
     # 限制上下文长度
     recent_messages = messages[-10:]
