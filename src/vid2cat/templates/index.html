@@ -30,20 +30,20 @@
                         {% endfor %}
                         {% else %}
                         {% if current_user.is_guest %}
-                        <button type="button" class="menu-action-btn" data-open-auth="login">登录 / 注册</button>
+                        <a href="/register" class="menu-action-btn">注册保存进度</a>
+                        <a href="/login" class="menu-action-btn">登录已有账号</a>
                         {% endif %}
                         {% if admin_user %}
                         <a href="/admin">后台管理</a>
                         {% endif %}
-                        {% if not current_user.is_guest %}
-                        <a href="/logout">退出登录</a>
-                        {% endif %}
+                        <a href="/logout">{{ "退出游客模式" if current_user.is_guest else "退出登录" }}</a>
                         {% endif %}
                     </div>
                 </div>
                 {% else %}
                 <div class="nav-auth-actions">
-                    <button type="button" class="accent-btn" data-open-auth="login">登录 / 注册</button>
+                    <a href="/login" class="ghost-btn">登录</a>
+                    <a href="/register" class="accent-btn">注册</a>
                 </div>
                 {% endif %}
             </nav>
@@ -71,7 +71,7 @@
                         <a class="primary-btn anchor-btn" href="/my-cat">进入我的猫</a>
                         {% else %}
                         <a class="primary-btn anchor-btn" href="/my-cat">直接开始养猫</a>
-                        <button type="button" class="ghost-btn" data-open-auth="login">登录已有账号</button>
+                        <a class="ghost-btn" href="/login">登录已有账号</a>
                         {% endif %}
                         <a class="ghost-btn" href="/plaza">浏览猫咪市场</a>
                     </div>
@@ -162,104 +162,6 @@
         </section>
     </div>
     {% endblock %}
-    {% if not current_user or current_user.is_guest %}
-    <div
-        id="auth-dialog"
-        class="dialog-overlay hidden"
-        data-auto-open="{% if request.query_params.get('auth_dialog') %}true{% else %}false{% endif %}"
-        data-initial-auth-tab="{{ request.query_params.get('auth_tab', 'login') }}"
-        aria-hidden="true"
-    >
-        <div class="dialog-backdrop" data-close-auth></div>
-        <section class="content-card auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-dialog-title">
-            <div class="dialog-header">
-                <div>
-                    <h2 id="auth-dialog-title">账号中心</h2>
-                    <span class="section-hint">登录、注册和管理员入口统一放在这里，手机端也更清晰</span>
-                </div>
-                <button type="button" class="dialog-close-btn" data-close-auth aria-label="关闭账号对话框">×</button>
-            </div>
-            <div class="auth-tab-row">
-                <button type="button" class="auth-tab-btn active" data-auth-tab="login">登录</button>
-                <button type="button" class="auth-tab-btn" data-auth-tab="register">注册</button>
-                <button type="button" class="auth-tab-btn" data-auth-tab="admin">管理员</button>
-            </div>
-
-            <div class="auth-panel active" data-auth-panel="login">
-                <div class="section-title-row compact-row">
-                    <div>
-                        <h3>登录账号</h3>
-                        <span class="section-hint">请输入邮箱和密码。登录后可继续当前养猫进度。</span>
-                    </div>
-                </div>
-                <form class="stack-form" action="/login" method="post">
-                    <input type="hidden" name="next" value="{{ request.url.path }}">
-                    <input type="email" name="email" placeholder="邮箱" required>
-                    <input type="password" name="password" placeholder="密码" required>
-                    {% if current_user and current_user.is_guest %}
-                    <label class="checkbox-row">
-                        <input type="checkbox" name="takeover_guest" value="1" checked>
-                        <span>登录后接管当前游客进度</span>
-                    </label>
-                    {% endif %}
-                    <button class="primary-btn full-width" type="submit">立即登录</button>
-                </form>
-            </div>
-
-            <div class="auth-panel" data-auth-panel="register">
-                <div class="section-title-row compact-row">
-                    <div>
-                        <h3>注册账号</h3>
-                        <span class="section-hint">注册成功后自动登录；若当前是游客模式，会自动接管进度。</span>
-                    </div>
-                </div>
-                <form class="stack-form" action="/register" method="post">
-                    <input type="text" name="username" placeholder="用户名" required>
-                    <input type="email" name="email" placeholder="邮箱" required>
-                    <input type="password" name="password" placeholder="密码" required>
-                    <button class="accent-btn full-width" type="submit">立即注册</button>
-                </form>
-            </div>
-
-            <div class="auth-panel" data-auth-panel="admin">
-                <div class="section-title-row compact-row">
-                    <div>
-                        <h3>管理员登录</h3>
-                        <span class="section-hint">管理员入口已合并到登录对话框中。</span>
-                    </div>
-                </div>
-                <form class="stack-form" action="/admin/login" method="post">
-                    <input type="text" name="username" placeholder="管理员用户名" required>
-                    <input type="password" name="password" placeholder="管理员密码" required>
-                    <button class="primary-btn full-width" type="submit">登录后台</button>
-                </form>
-            </div>
-        </section>
-    </div>
-    {% endif %}
-    <div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true">
-        <div class="dialog-backdrop" data-close-preview></div>
-        <section class="content-card image-preview-dialog" role="dialog" aria-modal="true" aria-labelledby="image-preview-title">
-            <div class="dialog-header">
-                <div>
-                    <h2 id="image-preview-title">预览卡</h2>
-                    <span class="section-hint">浮层查看分享卡，不会跳出当前页面</span>
-                </div>
-                <button type="button" class="dialog-close-btn" data-close-preview aria-label="关闭预览卡">×</button>
-            </div>
-            <div class="image-preview-body">
-                <img id="image-preview-target" src="" alt="分享卡预览">
-            </div>
-        </section>
-    </div>
-    <div id="loading-overlay" class="dialog-overlay hidden" aria-hidden="true">
-        <div class="dialog-backdrop"></div>
-        <section class="content-card loading-dialog" role="status" aria-live="polite">
-            <div class="loading-spinner"></div>
-            <h3 id="loading-overlay-title">处理中...</h3>
-            <p id="loading-overlay-text">请稍等，正在准备你的猫咪。</p>
-        </section>
-    </div>
     <script src="/static/app.js"></script>
 </body>
 </html>

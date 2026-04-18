@@ -600,7 +600,17 @@ def register_page(
     message: str = Query(default=""),
     error: str = Query(default=""),
 ):
-    return redirect_with_message("/my-cat", message=message, error=error, extra={"auth_dialog": "1", "auth_tab": "register"})
+    return templates.TemplateResponse(
+        request=request,
+        name="register.html",
+        context={
+            "request": request,
+            "message": message,
+            "error": error,
+            "admin_user": get_current_admin(request),
+            "current_user": get_current_user(request),
+        },
+    )
 
 
 @app.post("/register")
@@ -615,20 +625,20 @@ def register_submit(
         return redirect_with_message("/register", error="请完整填写注册信息")
     ok, msg = register_user(username, email, password)
     if ok:
-        user = authenticate_user(email, password)
+        user = authenticate_user(username, password)
         transferred = 0
         if user:
             if session_user and int(session_user.get("is_guest") or 0) == 1:
                 try:
                     transferred = transfer_guest_progress(int(session_user["id"]), int(user["id"]))
                 except Exception as exc:
-                    return redirect_with_message("/my-cat", error=str(exc), extra={"auth_dialog": "1", "auth_tab": "register"})
+                    return redirect_with_message("/register", error=str(exc))
             request.session["user_id"] = int(user["id"])
             request.session["show_growth_guide"] = transferred <= 0
         if transferred > 0:
             return redirect_with_message("/my-cat", message="注册成功，已自动接管当前游客进度")
         return redirect_with_message("/my-cat", message="注册成功，请先领养你的第一只猫")
-    return redirect_with_message("/my-cat", error=msg, extra={"auth_dialog": "1", "auth_tab": "register"})
+    return redirect_with_message("/register", error=msg)
 
 
 @app.get("/login")
@@ -638,27 +648,38 @@ def login_page(
     error: str = Query(default=""),
     next: str = Query(default="/my-cat"),
 ):
-    return redirect_with_message(next or "/my-cat", message=message, error=error, extra={"auth_dialog": "1", "auth_tab": "login"})
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={
+            "request": request,
+            "message": message,
+            "error": error,
+            "next": next,
+            "admin_user": get_current_admin(request),
+            "current_user": get_current_user(request),
+        },
+    )
 
 
 @app.post("/login")
 def login_submit(
     request: Request,
-    email: str = Form(...),
+    identity: str = Form(...),
     password: str = Form(...),
     next: str = Form("/my-cat"),
     takeover_guest: str = Form(default=""),
 ):
     session_user = get_current_user(request)
-    user = authenticate_user(email, password)
+    user = authenticate_user(identity, password)
     if not user:
-        return redirect_with_message(next or "/my-cat", error="邮箱或密码错误", extra={"auth_dialog": "1", "auth_tab": "login"})
+        return redirect_with_message("/login", error="用户名/邮箱或密码错误", extra={"next": next})
     transferred = 0
     if takeover_guest and session_user and int(session_user.get("is_guest") or 0) == 1:
         try:
             transferred = transfer_guest_progress(int(session_user["id"]), int(user["id"]))
         except Exception as exc:
-            return redirect_with_message(next or "/my-cat", error=str(exc), extra={"auth_dialog": "1", "auth_tab": "login"})
+            return redirect_with_message("/login", error=str(exc), extra={"next": next})
     request.session["user_id"] = int(user["id"])
     if transferred > 0:
         return redirect_with_message(next or "/my-cat", message=f"欢迎回来，{user['username']}，已接管当前游客进度")
@@ -1187,7 +1208,17 @@ def admin_login_page(
         return RedirectResponse("/admin", status_code=303)
     if admin and admin.get("must_change_password"):
         return RedirectResponse("/admin/password", status_code=303)
-    return redirect_with_message("/my-cat", message=message, error=error, extra={"auth_dialog": "1", "auth_tab": "admin"})
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_login.html",
+        context={
+            "request": request,
+            "message": message,
+            "error": error,
+            "default_admin_username": DEFAULT_ADMIN_USERNAME,
+            "default_admin_password": DEFAULT_ADMIN_PASSWORD,
+        },
+    )
 
 
 @app.post("/admin/login")
@@ -1198,7 +1229,7 @@ def admin_login_submit(
 ):
     admin = authenticate_admin(username, password)
     if not admin:
-        return redirect_with_message("/my-cat", error="管理员账号或密码错误", extra={"auth_dialog": "1", "auth_tab": "admin"})
+        return redirect_with_message("/admin/login", error="管理员账号或密码错误")
     request.session["admin_user_id"] = int(admin["id"])
     if admin.get("must_change_password"):
         return redirect_with_message("/admin/password", message="首次登录请先修改默认密码")
