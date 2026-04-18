@@ -18,14 +18,14 @@
                     <span class="section-hint">最多拥有 3 只，当前 {{ owned_count }}/3，点击卡片即可切换当前陪伴中的猫咪</span>
                 </div>
                 {% if can_adopt_new %}
-                <a class="ghost-btn anchor-btn" href="#adoption-panel">
+                <button type="button" class="ghost-btn anchor-btn" data-open-adoption>
                     {{ "完成首次领养" if needs_initial_adoption else "再领养一只" }}
-                </a>
+                </button>
                 {% endif %}
             </div>
 
             {% if owned_cats %}
-            <div class="cat-switcher-grid">
+            <div id="owned-cats-grid" class="cat-switcher-grid">
                 {% for owned in owned_cats %}
                 <article class="cat-switch-card{% if owned.is_active %} active{% endif %}">
                     <div class="cat-switch-thumb">
@@ -69,10 +69,25 @@
                 {% endfor %}
             </div>
             {% else %}
-            <div class="empty-state compact">
+            <div id="empty-owned-cats" class="empty-state compact">
                 你还没有领养任何猫咪。先选一只喜欢的品种和颜色，完成第一次领养。
             </div>
             {% endif %}
+            <div id="adoption-loading-grid" class="cat-switcher-grid hidden" aria-live="polite">
+                <article id="adoption-loading-card" class="cat-switch-card cat-switch-card-loading" aria-label="新猫咪正在生成中">
+                    <div class="cat-switch-thumb skeleton-box"></div>
+                    <div class="cat-switch-body">
+                        <div class="cat-switch-top">
+                            <h3>新猫咪生成中...</h3>
+                            <span class="pill muted">准备中</span>
+                        </div>
+                        <div class="pill-row compact">
+                            <span class="pill muted">正在匹配品种</span>
+                            <span class="pill muted">正在生成形象</span>
+                        </div>
+                    </div>
+                </article>
+            </div>
         </section>
 
         {% if cat %}
@@ -306,41 +321,46 @@
 
     </div>
     {% if can_adopt_new %}
-    <section id="adoption-panel" class="content-card adoption-panel">
-        <div class="section-title-row">
-            <div>
-                <h2>{{ "第一次领养" if needs_initial_adoption else "领养下一只猫" }}</h2>
-                <span class="section-hint">先选择品种和颜色；系统会基于预设提示词自动生成初始形象</span>
+    <div id="adoption-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="领养猫咪">
+        <div class="dialog-backdrop" data-close-adoption></div>
+        <section class="content-card adoption-dialog">
+            <div class="dialog-header">
+                <div>
+                    <h2>{{ "第一次领养" if needs_initial_adoption else "领养下一只猫" }}</h2>
+                    <span class="section-hint">先选择品种和颜色；系统会基于预设提示词自动生成初始形象</span>
+                </div>
+                <button type="button" class="ghost-btn dialog-close-btn" data-close-adoption aria-label="关闭领养窗口">&times;</button>
             </div>
-        </div>
-        <form class="stack-form" action="/my-cat/adopt" method="POST" data-adoption-form>
-            <div class="adoption-grid">
-                <label>
-                    <span>猫咪品种</span>
-                    <select name="breed" required>
-                        {% for breed in breed_options %}
-                        <option value="{{ breed }}">{{ breed }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-                <label>
-                    <span>猫咪颜色</span>
-                    <select name="color" required>
-                        {% for color in color_options %}
-                        <option value="{{ color }}">{{ color }}</option>
-                        {% endfor %}
-                    </select>
-                </label>
-            </div>
-            <div class="form-footer-hint">
-                <span class="pill muted">首次领养就会生成初始形象</span>
-                <span class="section-hint">之后先靠日常修炼攒满经验，再喂视频升级并学技能</span>
-            </div>
-            <div class="action-row">
-                <button type="submit" class="primary-btn">{{ "立即领养第一只猫" if needs_initial_adoption else "确认领养新猫" }}</button>
-            </div>
-        </form>
-    </section>
+            <form class="stack-form" action="/my-cat/adopt" method="POST" data-adoption-form>
+                <div class="adoption-grid">
+                    <label>
+                        <span>猫咪品种</span>
+                        <select name="breed" required>
+                            {% for breed in breed_options %}
+                            <option value="{{ breed }}">{{ breed }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                    <label>
+                        <span>猫咪颜色</span>
+                        <select name="color" required>
+                            {% for color in color_options %}
+                            <option value="{{ color }}">{{ color }}</option>
+                            {% endfor %}
+                        </select>
+                    </label>
+                </div>
+                <div class="form-footer-hint">
+                    <span class="pill muted">首次领养就会生成初始形象</span>
+                    <span class="section-hint">之后先靠日常修炼攒满经验，再喂视频升级并学技能</span>
+                </div>
+                <div class="dialog-actions action-row">
+                    <button type="button" class="ghost-btn" data-close-adoption>再想想</button>
+                    <button type="submit" class="primary-btn">{{ "立即领养第一只猫" if needs_initial_adoption else "确认领养新猫" }}</button>
+                </div>
+            </form>
+        </section>
+    </div>
     {% endif %}
     {% if show_growth_guide %}
     <section class="content-card">

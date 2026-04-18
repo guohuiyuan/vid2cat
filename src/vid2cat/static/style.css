@@ -36,6 +36,10 @@
     box-sizing: border-box;
 }
 
+.hidden {
+    display: none !important;
+}
+
 body {
     margin: 0;
     /* 推荐使用圆润的字体，配合整体风格 */
@@ -247,6 +251,25 @@ button, .primary-btn, .accent-btn, .ghost-btn, .anchor-btn {
     background: #fffaf0;
     border-color: var(--primary);
     box-shadow: 0 4px 16px rgba(251, 189, 97, 0.2);
+}
+
+.cat-switch-card-loading {
+    border-color: #f0d9af;
+    background: linear-gradient(120deg, #fff8ec 0%, #fffdf7 48%, #fff8ec 100%);
+}
+
+.skeleton-box {
+    position: relative;
+    overflow: hidden;
+}
+
+.skeleton-box::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0));
+    transform: translateX(-120%);
+    animation: shimmer 1.25s ease-in-out infinite;
 }
 
 .cat-switch-thumb {
@@ -770,6 +793,12 @@ select:focus, input:focus { border-color: var(--primary); }
 @keyframes spin {
     to {
         transform: rotate(360deg);
+    }
+}
+
+@keyframes shimmer {
+    to {
+        transform: translateX(120%);
     }
 }
 

@@ -25,6 +25,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const loadingOverlayTitle = document.getElementById("loading-overlay-title");
     const loadingOverlayText = document.getElementById("loading-overlay-text");
     const adoptionForm = document.querySelector("[data-adoption-form]");
+    const adoptionLoadingGrid = document.getElementById("adoption-loading-grid");
+    const ownedCatsGrid = document.getElementById("owned-cats-grid");
+    const emptyOwnedCats = document.getElementById("empty-owned-cats");
     const trainingButtons = document.querySelectorAll(".training-action-btn");
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
 
@@ -195,6 +198,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (adoptionForm) {
         adoptionForm.addEventListener("submit", () => {
+            if (adoptionLoadingGrid) {
+                if (ownedCatsGrid) {
+                    const loadingCard = adoptionLoadingGrid.querySelector("#adoption-loading-card");
+                    if (loadingCard && !ownedCatsGrid.contains(loadingCard)) {
+                        ownedCatsGrid.appendChild(loadingCard);
+                    }
+                    adoptionLoadingGrid.classList.add("hidden");
+                } else {
+                    adoptionLoadingGrid.classList.remove("hidden");
+                }
+            }
+            if (emptyOwnedCats) {
+                emptyOwnedCats.classList.add("hidden");
+            }
+            if (adoptionDialog) {
+                adoptionDialog.classList.add("hidden");
+                adoptionDialog.setAttribute("aria-hidden", "true");
+            }
             showLoadingOverlay("正在领养中...", "正在为你生成新的猫咪形象，请稍等一下。");
         });
     }
@@ -769,4 +790,7 @@ document.addEventListener("DOMContentLoaded", () => {
             await submitTraining(button.dataset.actionKey, button);
         });
     });
+
+    updateDialogBodyState();
+});
 
