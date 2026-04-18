@@ -62,6 +62,10 @@
                 {% elif card.available_for_adoption %}
                 <div class="inline-warning">登录后才能领养市场中的猫咪。</div>
                 {% endif %}
+                <div class="action-row">
+                    <a class="ghost-btn full-width anchor-btn" href="/cats/{{ card.id }}/share-card.png" target="_blank" rel="noopener noreferrer">预览分享卡</a>
+                    <a class="ghost-btn full-width anchor-btn" href="/cats/{{ card.id }}/share-card.png?download=1">下载分享卡</a>
+                </div>
             </div>
         </article>
         {% endfor %}

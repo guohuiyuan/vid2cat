@@ -11,7 +11,7 @@ from uuid import uuid4
 
 import uvicorn
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -76,6 +76,7 @@ from .services import (
     parse_douyin_to_feed,
     parse_model1_analysis,
 )
+from .share_cards import render_cat_share_card
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -300,6 +301,24 @@ def build_current_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
         "skill_badges": build_skill_badges(cat),
         "feed_gate_hint": feed_gate_hint,
         "can_feed": can_feed,
+    }
+
+
+def build_share_card_payload(cat: dict[str, Any]) -> dict[str, Any]:
+    persona = parse_cat_profile(str(cat.get("final_persona_json") or ""))
+    return {
+        "name": str(cat.get("name") or "未命名猫咪"),
+        "stage": str(cat.get("stage") or "初始态"),
+        "level": int(cat.get("level") or 0),
+        "feed_count": int(cat.get("feed_count") or 0),
+        "max_feed_count": int(cat.get("max_feed_count") or MAX_CAT_LEVEL),
+        "overall_power": int(cat.get("overall_power") or 0),
+        "image_url": str(cat.get("image_url") or ""),
+        "personality": str(cat.get("personality") or ""),
+        "story_summary": str(cat.get("story_summary") or ""),
+        "highest_level_owner_name": str(cat.get("highest_level_owner_name") or ""),
+        "learned_skills": parse_skill_list(str(cat.get("learned_skills_json") or "")),
+        "rarity": str(persona.get("rarity") or ""),
     }
 
 
@@ -842,6 +861,42 @@ def current_cat_state(request: Request):
     if not cat:
         raise HTTPException(status_code=404, detail="当前没有猫咪")
     return JSONResponse(build_current_cat_payload(cat))
+
+
+@app.get("/cats/{cat_id}/share-card.png")
+def cat_share_card(request: Request, cat_id: int, download: bool = Query(default=False)):
+    current_user = get_current_user(request)
+    settings = get_settings()
+    cat = get_cat_by_id(cat_id)
+    if not cat:
+        raise HTTPException(status_code=404, detail="猫咪不存在")
+
+    is_owner = current_user and int(cat.get("user_id") or 0) == int(current_user["id"])
+    is_public = bool(int(cat.get("is_public") or 0) or int(cat.get("available_for_adoption") or 0))
+    if not is_owner and not is_public:
+        raise HTTPException(status_code=403, detail="这张分享卡暂时不可访问")
+
+    owner_name = ""
+    if current_user and int(cat.get("user_id") or 0) == int(current_user["id"]):
+        owner_name = str(current_user.get("username") or "")
+    elif cat.get("highest_level_owner_name"):
+        owner_name = str(cat.get("highest_level_owner_name") or "")
+
+    site_url = str(settings.get("public_site_url") or "").strip() or "https://vid2cat.zeabur.app/"
+    image_bytes = render_cat_share_card(
+        build_share_card_payload(cat),
+        owner_name=owner_name,
+        site_url=site_url,
+    )
+    disposition = "attachment" if download else "inline"
+    return Response(
+        content=image_bytes,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": f'{disposition}; filename="cat-{cat_id}-share-card.png"',
+            "Cache-Control": "no-cache",
+        },
+    )
 
 
 @app.post("/my-cat/adopt")

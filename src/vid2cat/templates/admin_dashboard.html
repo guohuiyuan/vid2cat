@@ -39,6 +39,18 @@
                     <span class="section-hint">每套配置对应一条明确链路，模型 1 已接入实际解析流程</span>
                 </div>
                 <form class="stack-form" action="/admin/settings" method="post">
+                    <div class="section-title-row">
+                        <h2>站点与分享配置</h2>
+                        <span class="section-hint">分享卡二维码默认指向当前站点首页，可按部署域名调整</span>
+                    </div>
+                    <div class="admin-form-grid">
+                        <div class="info-panel">
+                            <h3>公开站点地址</h3>
+                            <input type="text" name="public_site_url" placeholder="https://vid2cat.zeabur.app/" value="{{ settings.public_site_url }}">
+                            <p>用于分享卡二维码和文案中的访问地址，默认指向 Zeabur 线上站点。</p>
+                        </div>
+                    </div>
+
                     <div class="admin-form-grid">
                         <div class="info-panel">
                             <h3>模型 1</h3>

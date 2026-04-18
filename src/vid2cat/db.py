@@ -31,6 +31,7 @@ DEFAULT_SETTINGS = {
     "gitee_token": "",
     "gitee_custom_url": "",
     "extra_upload_token": "",
+    "public_site_url": "https://vid2cat.zeabur.app/",
 }
 MAX_CAT_LEVEL = 6
 DEFAULT_EXP_TO_NEXT = 100

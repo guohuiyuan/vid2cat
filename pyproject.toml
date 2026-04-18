@@ -8,7 +8,9 @@ dependencies = [
     "itsdangerous>=2.2.0",
     "jinja2>=3.1.6",
     "json-repair>=0.52.3",
+    "pillow>=11.3.0",
     "python-multipart>=0.0.20",
+    "qrcode>=8.2",
     "uvicorn>=0.35.0",
 ]
 
