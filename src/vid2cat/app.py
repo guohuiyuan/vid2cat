@@ -1105,18 +1105,6 @@ def admin_dashboard(
     if redirect:
         return redirect
     settings = get_settings()
-    prompt_examples = []
-    for row in list_atlases(limit=6):
-        profile = parse_cat_profile(row.get("cat_profile_json") or "")
-        prompt_examples.append(
-            {
-                "id": row.get("id"),
-                "title": row.get("title") or "未命名图鉴",
-                "cat_name": profile.get("name") or profile.get("breed") or "未命名猫咪",
-                "prompt_scaffold": row.get("prompt_scaffold") or "",
-                "image_prompt": row.get("cat_image_prompt") or profile.get("image_prompt") or "",
-            }
-        )
     return templates.TemplateResponse(
         request=request,
         name="admin_dashboard.html",
@@ -1129,7 +1117,6 @@ def admin_dashboard(
             "uploaded_url": uploaded_url,
             "image_host_status": ImageHostScaffold.describe(settings),
             "recent_users": list_recent_users(limit=12),
-            "prompt_examples": prompt_examples,
         },
     )
 
