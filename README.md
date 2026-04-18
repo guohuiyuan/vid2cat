@@ -1,58 +1,256 @@
 # vid2cat
 
-`vid2cat` 是一个基于 `Python + FastAPI + Jinja2 + SQLite + Node.js + PicGo-Core` 的抖音驱动猫咪养成 Web 原型。
+<p align="center">
+  <img src="./src/vid2cat/static/favicon.png" alt="vid2cat logo" width="260">
+</p>
 
-当前代码的主流程已经从“抖音视频 -> 图鉴展示”转成“注册登录 -> 首次领养 -> 喂养成长 -> 对话陪伴 -> 放入市场 / 重新领养”的养成玩法。
+`vid2cat` 是一个基于 `FastAPI + Jinja2 + SQLite + Node.js + PicGo-Core` 的抖音驱动猫咪养成 Web 原型。
 
-## 当前状态
+当前主玩法已经从早期的“抖音视频 -> 图鉴展示”演进为：
 
-已经跑通的核心链路：
+`注册 / 游客进入 -> 首次领养 -> 日常修炼 -> 抖音喂养升级 -> SSE 对话陪伴 -> 放入市场 / 重新领养`
 
-- 用户注册、登录、退出
-- 首次领养显式选择猫咪品种和颜色
-- 首次领养支持可选图片链接；如果没有图片，会使用预设提示词自动生成初始形象
+## 当前能力
+
+已经落地的核心链路：
+
+- 用户注册、登录、退出，以及游客模式自动建号
+- 首次领养时选择猫咪品种和颜色
+- 首次领养支持图片链接；未提供时自动生成初始形象
 - 每个用户最多持有 3 只猫，并支持当前陪伴猫切换
-- 对话与喂养共用一个输入框
-- 抖音链接喂养走异步任务，完成后刷新猫咪形象与属性
-- 猫咪可放入市场，其他用户可重新领养
-- 图鉴体系仍保留，可继续解析抖音内容并展示图鉴详情
-- 管理员后台可维护三模型与图床配置
+- 对话和喂养共用一个输入框
+- 普通文本走 SSE 流式聊天，并带逐字打印效果
+- 抖音链接走异步喂养任务，完成后局部刷新猫咪状态
+- 0 到 6 级成长体系、经验条、日常修炼、技能稀有度
+- 猫咪市场发布与重新领养
+- 图鉴页、评论、评分与管理员后台配置
 
-## 产品主循环
+## 推荐体验流程
 
-当前版本的推荐体验路径：
-
-1. 用户注册或登录后进入 `/my-cat`
-2. 第一次领养时先选品种和颜色，再决定是否提供图片链接
-3. 如果没有图片，系统会基于“喵喵系”预设人设自动生成初始猫图
+1. 打开 `/my-cat`，游客也可以直接开始。
+2. 第一次领养先选品种和颜色。
+3. 先通过“晒太阳 / 冥想”把经验条练满。
 4. 在统一输入框中输入内容：
-   - 普通文本：进入流式聊天
-   - 包含抖音链接：进入喂养任务
-5. 喂养完成后，猫咪的属性、故事摘要和形象会同步更新
-6. 用户可在“我的三只猫”区域切换当前陪伴中的猫
-7. 用户可把猫放入市场，其他用户可重新领养
+   - 普通文本：进入陪伴聊天
+   - 抖音链接：触发喂养升级
+5. 每喂一个视频，猫咪会升级、学习新技能，并刷新形象与成长摘要。
+6. 满级后仍可继续聊天，也可发布到市场等待新主人领养。
 
-## 喵喵设定
+## 代码架构总览
 
-当前代码里，猫咪的人设不再是随机散点，而是统一围绕“喵喵系角色”约束生成：
+当前项目是一个典型的单体 Web 应用，没有再拆成微服务，核心逻辑集中在 `src/vid2cat/` 下：
 
-- 亲人、敏感、聪明，会观察主人的情绪
-- 有陪伴欲，也带一点嘴硬心软和小傲娇
-- 会把抖音内容理解成自己的成长能量
-- 说话自然，不会每句都机械重复“喵”
-- 不写成客服或 AI 助手，而是“被主人养熟的小猫”
+```text
+vid2cat/
+├─ src/vid2cat/
+│  ├─ app.py                # FastAPI 入口、路由、页面拼装、异步任务管理
+│  ├─ db.py                 # SQLite 初始化、迁移补列、业务数据读写
+│  ├─ services.py           # 抖音解析、AI 提示词、猫设生成、聊天/喂养编排
+│  ├─ integrations.py       # OpenAI 兼容模型调用、PicGo 图床适配
+│  ├─ static/
+│  │  ├─ app.js             # 前端交互：SSE 聊天、任务轮询、局部刷新
+│  │  ├─ style.css          # 全站样式
+│  │  └─ favicon.png        # 当前网站 favicon
+│  ├─ templates/
+│  │  ├─ index.html         # 主要基础布局
+│  │  ├─ my_cat.html        # 核心养成页面
+│  │  ├─ plaza.html         # 猫咪市场
+│  │  ├─ atlas_list.html    # 图鉴列表
+│  │  ├─ atlas_detail.html  # 图鉴详情
+│  │  ├─ login.html
+│  │  ├─ register.html
+│  │  ├─ admin_login.html
+│  │  ├─ admin_password.html
+│  │  └─ admin_dashboard.html
+│  └─ __init__.py
+├─ scripts/
+│  └─ upload.js             # PicGo-Core 上传脚本
+├─ data/                    # SQLite 数据库与运行时文件
+├─ 哈吉咪LOGO方.png         # 项目 Logo 源图
+├─ pyproject.toml           # Python 依赖与入口脚本
+├─ package.json             # Node.js 图床依赖
+├─ docker-compose.yml
+├─ docker-compose.dev.yml
+└─ README.md
+```
 
-这套基础设定已经统一接入：
+## 分层说明
 
-- 初始领养提示词
-- 图鉴态猫设生成
-- 成长终局猫设生成
-- 日常聊天系统提示词
+### 1. 页面入口层：`app.py`
 
-相关实现主要在：
+`src/vid2cat/app.py` 是整个应用的总入口，职责非常集中：
 
-- `src/vid2cat/services.py`
-- `src/vid2cat/db.py`
+- 创建 `FastAPI` 应用、Session 中间件和 `/static` 静态资源挂载
+- 定义页面路由、表单提交接口和 JSON / SSE 接口
+- 组织模板上下文，把数据库数据加工成页面可直接消费的结构
+- 管理异步喂养任务状态 `ASYNC_TASKS`
+- 提供 `/api/my-cat/current` 给前端做局部热刷新
+
+可以把它理解成当前项目的“控制器层 + 页面编排层”。
+
+### 2. 业务服务层：`services.py`
+
+`src/vid2cat/services.py` 负责业务规则和 AI 相关编排，是当前最像“领域服务”的部分：
+
+- 识别输入是否包含抖音链接
+- 解析抖音页面数据、抽取视频信息
+- 组织模型 1 / 2 / 3 的提示词与调用输入
+- 维护统一的“喵喵系角色”人设约束
+- 生成初始领养人设、成长后人设、聊天回复和图像提示词
+
+这层不直接处理模板，但决定了“猫怎么成长、怎么说话、怎么生成形象”。
+
+### 3. 数据持久层：`db.py`
+
+`src/vid2cat/db.py` 同时承担了数据库初始化、轻量迁移和数据访问职责：
+
+- 初始化 `users`、`cats`、`cat_feed_records`、`cat_messages`、`atlases` 等表
+- 通过 `ensure_column()` 在旧库上做补列式迁移
+- 封装用户、猫咪、市场、图鉴、评论、评分、配置的增删改查
+- 实现等级、经验、训练、重新领养等核心持久化逻辑
+
+目前它更像“Repository + Service 混合体”，优点是直观，缺点是随着业务继续增长会逐渐变厚。
+
+### 4. 外部集成层：`integrations.py`
+
+`src/vid2cat/integrations.py` 负责统一封装外部依赖：
+
+- `AIModelRuntime`：OpenAI 兼容文本和绘图接口调用
+- `ImageHostScaffold`：图像上传和镜像上传
+- `PromptEngineScaffold`：预留的提示词 scaffold
+
+这层把“调用外部服务”的细节从业务逻辑里隔离出来，后续如果替换模型供应商或图床，改动面会更小。
+
+### 5. 模板视图层：`templates/`
+
+模板当前采用 Jinja2，结构上是“一个主基底 + 多个业务页面”的形式：
+
+- `index.html`：主要公共头部与首页布局，也作为大部分页面的基础模板
+- `my_cat.html`：主玩法页面，承载领养、切换、训练、聊天、喂养、成长展示
+- `plaza.html`：市场页
+- `atlas_list.html` / `atlas_detail.html`：图鉴页
+- `admin_dashboard.html`：后台配置页
+- `login.html` / `register.html` / `admin_login.html` / `admin_password.html`：独立表单页
+
+### 6. 前端交互层：`static/app.js`
+
+`src/vid2cat/static/app.js` 是目前前端动态行为的核心：
+
+- 判断输入内容是“聊天”还是“喂养”
+- 走 `fetch + SSE` 接收聊天 token，并做逐字打印
+- 提交喂养任务后轮询 `/api/tasks/{task_id}`
+- 任务完成后调用 `/api/my-cat/current` 局部刷新猫咪卡片
+- 处理评分星级等交互
+
+所以当前前端虽然是传统模板渲染，但关键体验已经是“服务端模板 + 轻交互 JS”的模式。
+
+## 当前请求流
+
+### 聊天流
+
+1. 页面在 `my_cat.html` 提交到 `/api/my-cat/chat/stream`
+2. `app.py` 读取当前猫和最近消息
+3. `services.py` 生成聊天回复
+4. 后端通过 `StreamingResponse` 按 token 推送
+5. `app.js` 逐字打印并把最终回复写回界面
+
+### 喂养流
+
+1. 用户在统一输入框贴入抖音链接
+2. `app.js` 识别为喂养请求，提交到 `/api/my-cat/feed`
+3. `app.py` 创建异步任务并启动 `run_feed_task()`
+4. `services.py` 解析视频、生成成长资料与新图像
+5. `db.py` 写入喂养记录、等级、技能、最新形象
+6. 前端轮询任务状态，完成后调用 `/api/my-cat/current` 局部刷新
+
+### 图鉴流
+
+1. 用户访问 `/atlases` 或 `/atlas/{atlas_id}`
+2. `app.py` 读取图鉴记录、评分、评论
+3. `services.py` 负责解析猫设与模型输出展示数据
+4. 模板渲染图鉴详情、评论和评分组件
+
+## 三模型职责
+
+### 模型 1：视频分析
+
+用途：
+
+- 输出结构化视频摘要、标签和分数
+- 为喂养属性变化和图鉴分析提供基础数据
+
+### 模型 2：猫设生成
+
+用途：
+
+- 生成初始领养猫设
+- 生成图鉴态设定
+- 生成成长后的稳定人格
+- 为聊天回复提供角色约束
+
+### 模型 3：图像生成
+
+用途：
+
+- 根据当前视频摘要和当前猫资料生成新猫图
+
+当前实现中，生成后的图片会统一转成最终可访问 URL 再落库。
+
+## 核心页面
+
+### `/my-cat`
+
+这是当前主页面，承载：
+
+- 我的三只猫切换
+- 首次领养 / 再领养
+- 经验条和成长规则
+- 日常训练
+- 聊天和喂养统一输入框
+- 异步进化状态展示
+- 当前属性、技能、人格和成长摘要
+
+### `/plaza`
+
+这是当前的市场页面，承载：
+
+- 公开猫咪展示
+- 放入市场后的重新领养
+- 满级原主人信息保留
+
+### `/atlases` 与 `/atlas/{atlas_id}`
+
+这是旧图鉴能力的保留入口，目前仍有价值：
+
+- 兼容早期“视频 -> 图鉴”的链路
+- 作为模型分析结果的展示页
+- 给后台调试提示词和输出结构提供参考
+
+### `/admin`
+
+管理员后台负责：
+
+- 模型 1 / 2 / 3 的 API 配置
+- 图床配置
+- 图床上传测试
+- 最近注册用户查看
+
+## 数据模型
+
+SQLite 默认路径：
+
+- `data/vid2cat.db`
+
+当前核心表：
+
+- `users`：正式用户、管理员、游客用户
+- `cats`：猫咪主表，包含等级、经验、形象、人格、市场状态
+- `cat_feed_records`：每次喂养对应的视频与属性变化
+- `cat_training_records`：日常修炼记录
+- `cat_messages`：聊天记录
+- `atlases`：图鉴主表
+- `comments` / `ratings`：图鉴互动
+- `app_settings`：后台配置项
 
 ## 技术栈
 
@@ -64,256 +262,7 @@
 - json-repair
 - Node.js
 - PicGo-Core
-
-## 目录结构
-
-```text
-vid2cat/
-├─ src/vid2cat/
-│  ├─ static/
-│  │  ├─ app.js
-│  │  └─ style.css
-│  ├─ templates/
-│  │  ├─ index.html
-│  │  ├─ my_cat.html
-│  │  ├─ plaza.html
-│  │  ├─ atlas_list.html
-│  │  ├─ atlas_detail.html
-│  │  ├─ login.html
-│  │  ├─ register.html
-│  │  ├─ admin_login.html
-│  │  ├─ admin_password.html
-│  │  └─ admin_dashboard.html
-│  ├─ app.py
-│  ├─ db.py
-│  ├─ integrations.py
-│  ├─ services.py
-│  └─ __init__.py
-├─ scripts/
-│  └─ upload.js
-├─ data/
-├─ package.json
-├─ pyproject.toml
-└─ README.md
-```
-
-## 代码分层
-
-### 1. Web 层
-
-负责路由、模板渲染、表单提交、异步接口输出。
-
-核心文件：
-
-- `src/vid2cat/app.py`
-
-主要职责：
-
-- 用户注册登录
-- 我的猫页面与市场页面
-- 图鉴相关页面
-- 喂养异步任务与聊天流式接口
-- 管理员后台
-
-### 2. 业务服务层
-
-负责抖音解析、AI 设定生成、图片生成与聊天人设。
-
-核心文件：
-
-- `src/vid2cat/services.py`
-
-主要职责：
-
-- 解析抖音链接与页面数据
-- 模型 1 生成视频分析
-- 模型 2 生成人设与对话人格
-- 模型 3 生成猫咪图像
-- 维护统一的“喵喵系角色”设定
-
-### 3. 数据层
-
-负责 SQLite 表结构初始化和增删改查。
-
-核心文件：
-
-- `src/vid2cat/db.py`
-
-主要职责：
-
-- 用户、猫咪、喂养记录、消息、图鉴、评论、评分、系统配置的持久化
-- 默认管理员初始化
-- 历史数据库迁移
-
-### 4. 集成层
-
-负责 AI 模型调用和图床上传。
-
-核心文件：
-
-- `src/vid2cat/integrations.py`
-- `scripts/upload.js`
-
-## 三模型链路
-
-### 模型 1：视频分析
-
-用途：
-
-- 根据抖音作品生成结构化摘要
-- 输出标签、建议和分数
-- 为喂养事件提供属性变化依据
-
-### 模型 2：猫设生成
-
-用途：
-
-- 生成图鉴态猫设
-- 生成首次领养的人设
-- 生成成长终局的人设
-- 为聊天提供稳定人格
-
-输出字段：
-
-- `name`
-- `breed`
-- `skill`
-- `power`
-- `personality`
-- `story`
-- `appearance`
-- `rarity`
-- `image_prompt`
-
-### 模型 3：图像生成
-
-用途：
-
-- 根据模型 2 的设定和绘图提示词生成猫图
-
-处理规则：
-
-- 若返回 `b64_json`，则先上传图床
-- 若返回远程图片 URL，则镜像上传图床
-- 数据库只保留最终可访问 URL
-
-## 当前页面
-
-### 我的猫 `/my-cat`
-
-当前是主页面，包含：
-
-- “我的三只猫”卡片切换区
-- 首次领养 / 再领养入口
-- 当前猫咪形象与属性
-- 统一对话/喂养输入框
-- 成长记录
-- 新用户专属成长说明
-
-### 猫咪市场 `/plaza`
-
-包含：
-
-- 已公开展示的猫咪
-- 已被放入市场等待重新领养的猫咪
-- 登录后重新领养操作
-
-### 图鉴相关
-
-仍保留原图鉴能力：
-
-- `/atlases`
-- `/atlas/{atlas_id}`
-
-用于兼容原“抖音视频 -> 图鉴”链路，以及管理员提示词参考。
-
-### 管理员后台
-
-包括：
-
-- `/admin/login`
-- `/admin/password`
-- `/admin`
-
-支持：
-
-- 模型 1 / 2 / 3 配置
-- 图床配置
-- 图床上传测试
-
-## 数据模型
-
-SQLite 数据库默认位于：
-
-- `data/vid2cat.db`
-
-当前主要表：
-
-- `users`
-- `cats`
-- `cat_feed_records`
-- `cat_messages`
-- `atlases`
-- `comments`
-- `ratings`
-- `app_settings`
-
-### `cats`
-
-当前承载：
-
-- 当前用户拥有的猫
-- 当前陪伴状态 `is_active`
-- 市场状态 `is_public` / `available_for_adoption`
-- 当前形象 `image_url`
-- 当前人格 `personality`
-- 当前故事 `story_summary`
-
-### `cat_feed_records`
-
-记录每次喂养：
-
-- 来源链接
-- 视频标题 / 作者 / 摘要
-- 标签摘要
-- 五维属性变化
-- 模型 1 原始输出
-
-### `cat_messages`
-
-记录与当前猫的聊天消息，用于持续塑造陪伴感与上下文。
-
-## 主要路由
-
-### 用户主流程
-
-- `GET /`：重定向到 `/my-cat`
-- `GET /register`
-- `POST /register`
-- `GET /login`
-- `POST /login`
-- `GET /logout`
-- `GET /my-cat`
-- `POST /my-cat/adopt`
-- `POST /my-cat/adopt-new`
-- `POST /my-cat/switch`
-- `POST /my-cat/release`
-- `POST /my-cat/publish`
-
-### 异步与交互接口
-
-- `POST /api/my-cat/chat/stream`
-- `POST /api/my-cat/feed`
-- `GET /api/tasks/{task_id}`
-
-### 图鉴与社区相关
-
-- `GET /atlases`
-- `GET /atlas/{atlas_id}`
-- `POST /atlas/{atlas_id}/comment`
-- `POST /atlas/{atlas_id}/rating`
-- `GET /plaza`
-- `POST /plaza/adopt`
+- picgo-plugin-github-plus
 
 ## 安装与启动
 
@@ -331,8 +280,10 @@ npm install
 
 ### 3. 启动服务
 
+开发环境可直接运行：
+
 ```bash
-uv run uvicorn vid2cat.app:app --host 127.0.0.1 --port 8126
+uv run uvicorn vid2cat.app:app --host 127.0.0.1 --port 8080
 ```
 
 或使用项目入口：
@@ -348,6 +299,11 @@ uv run vid2cat
 vid2cat = "vid2cat:main"
 ```
 
+注意：
+
+- 当前部署约定端口优先使用 `8080`
+- `docker-compose` 仅建议挂载 `data/` 目录
+
 ## 管理员账号
 
 首次启动若数据库内没有管理员，会自动创建：
@@ -357,11 +313,9 @@ vid2cat = "vid2cat:main"
 
 首次登录后台后会强制修改密码。
 
-## 配置项
+## 后台配置项
 
-当前后台可配置：
-
-### 模型配置
+### AI 模型配置
 
 - `ai_model_1_api_url`
 - `ai_model_1_api_key`
@@ -382,36 +336,18 @@ vid2cat = "vid2cat:main"
 - `gitee_custom_url`
 - `extra_upload_token`
 
-## 前端交互说明
+## 当前实现特点
 
-### 统一输入框
+- 后端是单体结构，便于快速迭代
+- 前端采用服务端模板渲染，关键交互通过原生 JS 增强
+- 聊天采用 SSE 流式输出并做逐字打印
+- 喂养与生图采用异步任务，避免阻塞页面
+- 图像上传由 Python 后端协调、Node.js 脚本落地
 
-`src/vid2cat/static/app.js` 当前会自动识别输入内容：
+## 后续可以继续拆分的方向
 
-- 命中抖音链接域名：提交喂养任务
-- 普通文本：走流式聊天
-
-### 异步喂养
-
-喂养过程不是同步阻塞，而是：
-
-1. 提交任务
-2. 轮询任务状态
-3. 展示“分析中 / 生图中 / 已完成”
-4. 完成后回到 `/my-cat`
-
-## 已知限制
-
-- 抖音搜索结果仍以占位候选为主，不是真正的平台搜索
-- 市场目前是“公开展示 + 重新领养”模式，还不是完整社区
-- 聊天与人设质量高度依赖模型 2 的稳定性
-- 模型 3 和图床链路失败时，仍需要更多重试与回退策略
-- “图鉴体系”和“猫咪养成体系”目前并存，后续还可以继续梳理
-
-## 下一步建议
-
-- 为首次领养补“本地图片上传”而不只是图片链接
-- 为喂养任务增加失败重试和超时提示
-- 在市场里补更多状态标签与排序
-- 把“喵喵设定”进一步拆成后台可配置模板
-- 增加猫咪详情页或市场详情页，展示完整成长轨迹
+- 把 `app.py` 中的页面路由与 API 路由拆成更清晰的模块
+- 把 `db.py` 中的查询函数按用户 / 猫咪 / 图鉴 / 后台配置拆分
+- 给异步任务引入更稳定的任务队列或持久化状态
+- 把“喵喵系角色”提示词抽成后台可配置模板
+- 为市场和猫咪补更完整的详情页
