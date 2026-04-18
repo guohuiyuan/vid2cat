@@ -1,0 +1,12 @@
+services:
+  vid2cat:
+    image: ${IMAGE_NAME:-docker.io/${DOCKERHUB_USERNAME:-yourname}/vid2cat:latest}
+    container_name: vid2cat
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
