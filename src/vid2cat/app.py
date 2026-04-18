@@ -17,9 +17,11 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
 from .db import (
+    DAILY_TRAINING_ACTIONS,
     DEFAULT_ADMIN_PASSWORD,
     DEFAULT_ADMIN_USERNAME,
     DEFAULT_SETTINGS,
+    MAX_CAT_LEVEL,
     add_comment,
     adopt_plaza_cat,
     add_cat_feed_record,
@@ -45,6 +47,8 @@ from .db import (
     list_comments,
     list_recent_users,
     list_user_cats,
+    parse_skill_list,
+    perform_daily_training,
     release_cat_to_plaza,
     register_user,
     save_atlas,
@@ -117,6 +121,9 @@ def build_atlas_card(atlas: dict) -> dict:
 
 def build_cat_card(cat: dict) -> dict:
     image_url = cat.get("image_url") or ""
+    exp = int(cat.get("exp") or 0)
+    exp_to_next = int(cat.get("exp_to_next") or 0)
+    exp_percent = 100 if exp_to_next <= 0 else min(100, round(exp / exp_to_next * 100))
     return {
         "id": cat.get("id"),
         "cat_name": cat.get("name") or "未命名猫咪",
@@ -124,9 +131,16 @@ def build_cat_card(cat: dict) -> dict:
         "image_url": image_url,
         "stage": cat.get("stage") or "初始态",
         "feed_count": cat.get("feed_count") or 0,
-        "max_feed_count": cat.get("max_feed_count") or 5,
+        "max_feed_count": cat.get("max_feed_count") or MAX_CAT_LEVEL,
+        "level": int(cat.get("level") or 0),
+        "exp": exp,
+        "exp_to_next": exp_to_next,
+        "exp_percent": exp_percent,
         "overall_power": cat.get("overall_power") or 50,
         "summary": cat.get("personality") or cat.get("story_summary") or "暂无介绍",
+        "learned_skills": parse_skill_list(str(cat.get("learned_skills_json") or "")),
+        "highest_level_owner_name": cat.get("highest_level_owner_name") or cat.get("username") or "未知主人",
+        "highest_level_reached": int(cat.get("highest_level_reached") or cat.get("level") or 0),
         "available_for_adoption": int(cat.get("available_for_adoption") or 0),
         "is_active": int(cat.get("is_active") or 0),
     }
@@ -214,20 +228,71 @@ def build_feed_record_cards(records: list[dict[str, Any]]) -> list[dict[str, Any
         cards.append(
             {
                 **row,
+                "learned_skill": str(row.get("learned_skill") or "").strip(),
                 "delta_items": delta_items,
             }
         )
     return cards
 
 
+def build_skill_badges(cat: dict[str, Any]) -> list[str]:
+    return parse_skill_list(str(cat.get("learned_skills_json") or ""))
+
+
+def build_exp_progress(cat: dict[str, Any]) -> dict[str, int]:
+    level = int(cat.get("level") or 0)
+    exp = int(cat.get("exp") or 0)
+    exp_to_next = int(cat.get("exp_to_next") or 0)
+    percent = 100 if exp_to_next <= 0 else min(100, round(exp / exp_to_next * 100))
+    return {
+        "level": level,
+        "exp": exp,
+        "exp_to_next": exp_to_next,
+        "percent": percent,
+        "remaining": 0 if exp_to_next <= 0 else max(0, exp_to_next - exp),
+    }
+
+
+def build_training_cards() -> list[dict[str, Any]]:
+    return [
+        {
+            "key": key,
+            "label": str(config["label"]),
+            "description": str(config["description"]),
+            "exp_gain": int(config["exp_gain"]),
+        }
+        for key, config in DAILY_TRAINING_ACTIONS.items()
+    ]
+
+
+def get_feed_gate_status(cat: dict[str, Any] | None) -> tuple[bool, str]:
+    if not cat:
+        return False, "请先领养第一只猫。"
+    level = int(cat.get("level") or 0)
+    feed_count = int(cat.get("feed_count") or 0)
+    max_feed_count = int(cat.get("max_feed_count") or MAX_CAT_LEVEL)
+    if level >= MAX_CAT_LEVEL or feed_count >= max_feed_count:
+        return False, f"这只猫已经升到 {MAX_CAT_LEVEL} 级，无法继续喂食，但可以继续对话。"
+    exp_to_next = int(cat.get("exp_to_next") or 0)
+    exp = int(cat.get("exp") or 0)
+    if exp_to_next > 0 and exp < exp_to_next:
+        return False, f"经验还差 {exp_to_next - exp} 点，先完成日常修炼，再喂视频让它升级。"
+    return True, f"经验条已满，可以喂第 {feed_count + 1} 个视频，让它升到 {level + 1} 级并学会一个新技能。"
+
+
 def build_cat_stage_hint(cat: dict[str, Any]) -> str:
     feed_count = int(cat.get("feed_count") or 0)
-    max_feed_count = int(cat.get("max_feed_count") or 5)
-    if feed_count <= 0:
-        return "新领养的小猫，快喂第 1 条让它开始成长。"
-    if feed_count >= max_feed_count:
-        return f"这只猫已经喂满了 {max_feed_count} 次，之后只能继续对话，不能再喂食。"
-    return f"已经完成 {feed_count}/{max_feed_count} 次喂养，每喂一次都会刷新当前形象。"
+    level = int(cat.get("level") or 0)
+    max_feed_count = int(cat.get("max_feed_count") or MAX_CAT_LEVEL)
+    exp_progress = build_exp_progress(cat)
+    can_feed, hint = get_feed_gate_status(cat)
+    if level <= 0 and feed_count <= 0 and exp_progress["exp"] <= 0:
+        return "新领养的小猫还是 0 级，先做一次日常修炼，把经验条练满后再喂第 1 个视频。"
+    if can_feed:
+        return hint
+    if level >= MAX_CAT_LEVEL or feed_count >= max_feed_count:
+        return f"这只猫已经升到 {MAX_CAT_LEVEL} 级，6 个视频都学完了，之后只能继续对话。"
+    return f"当前 {level} 级，经验 {exp_progress['exp']}/{exp_progress['exp_to_next']}，还差 {exp_progress['remaining']} 点经验才能继续喂视频。"
 
 
 def build_adoption_context(owned_count: int) -> dict[str, Any]:
@@ -263,7 +328,13 @@ def update_async_task(task_id: str, **kwargs: Any) -> None:
     task["updated_at"] = time.time()
 
 
-async def run_feed_task(task_id: str, cat: dict[str, Any], parsed_url: str, settings: dict[str, str]) -> None:
+async def run_feed_task(
+    task_id: str,
+    cat: dict[str, Any],
+    parsed_url: str,
+    settings: dict[str, str],
+    current_owner_name: str,
+) -> None:
     update_async_task(task_id, status="running", message="正在分析视频内容")
     try:
         feed_result = await asyncio.wait_for(
@@ -271,7 +342,7 @@ async def run_feed_task(task_id: str, cat: dict[str, Any], parsed_url: str, sett
             timeout=45,
         )
         update_async_task(task_id, message="正在写入成长记录")
-        updated_cat = await asyncio.to_thread(add_cat_feed_record, int(cat["id"]), feed_result)
+        updated_cat = await asyncio.to_thread(add_cat_feed_record, int(cat["id"]), feed_result, current_owner_name)
 
         feed_count = int(updated_cat.get("feed_count") or 0)
         update_async_task(task_id, message=f"第 {feed_count} 次喂养完成，正在生成新形象")
@@ -312,12 +383,12 @@ async def run_feed_task(task_id: str, cat: dict[str, Any], parsed_url: str, sett
             image_result["url"],
             profile["personality"],
             profile["story"],
-            "已满级" if feed_count >= 5 else "成长中",
+            "已满级" if int(updated_cat.get("level") or 0) >= MAX_CAT_LEVEL else "成长中",
         )
         update_async_task(
             task_id,
             status="done",
-            message=f"第 {feed_count} 次喂养完成，猫咪形象已更新",
+            message=f"第 {feed_count} 次喂养完成，已升到 {int(updated_cat.get('level') or 0)} 级并刷新猫咪形象",
         )
         return
 
@@ -337,8 +408,9 @@ def submit_feed_for_current_user(request: Request, raw_input: str) -> RedirectRe
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
         return redirect_with_message("/my-cat", error="请先领养第一只猫，再开始喂养和对话。")
-    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 5):
-        return redirect_with_message("/my-cat", error="这只猫已经喂满了 5 次，无法继续喂食，但可以继续对话。")
+    can_feed, reason = get_feed_gate_status(cat)
+    if not can_feed:
+        return redirect_with_message("/my-cat", error=reason)
     parsed_url = extract_first_url(raw_input) or raw_input.strip()
     if not is_douyin_url(parsed_url):
         return redirect_with_message("/my-cat", error="请输入抖音作品链接")
@@ -535,6 +607,10 @@ def my_cat_page(
     feed_records = build_feed_record_cards(list_cat_feed_records(int(cat["id"]), limit=12)) if cat else []
     chat_history = list_cat_messages(int(cat["id"]), limit=10) if cat else []
     adoption_context = build_adoption_context(owned_count)
+    exp_progress = build_exp_progress(cat) if cat else {"level": 0, "exp": 0, "exp_to_next": 0, "percent": 0, "remaining": 0}
+    skill_badges = build_skill_badges(cat) if cat else []
+    training_actions = build_training_cards()
+    can_feed, feed_gate_hint = get_feed_gate_status(cat)
     show_growth_guide = bool(request.session.get("show_growth_guide")) and (
         owned_count == 0 or (cat is not None and owned_count == 1 and int(cat.get("feed_count") or 0) == 0)
     )
@@ -556,8 +632,9 @@ def my_cat_page(
             "feed_records": feed_records,
             "chat_history": chat_history,
             "stage_hint": build_cat_stage_hint(cat) if cat else "先完成首次领养，再开始喂养和聊天。",
-            "remaining_feeds": max(0, int(cat.get("max_feed_count") or 5) - int(cat.get("feed_count") or 0)) if cat else 0,
-            "can_feed": bool(cat) and int(cat.get("feed_count") or 0) < int(cat.get("max_feed_count") or 5),
+            "remaining_feeds": max(0, int(cat.get("max_feed_count") or MAX_CAT_LEVEL) - int(cat.get("feed_count") or 0)) if cat else 0,
+            "can_feed": bool(cat) and can_feed,
+            "feed_gate_hint": feed_gate_hint if cat else "",
             "can_generate_final": False,
             "can_adopt_new": adoption_context["can_adopt_new"],
             "can_release": bool(cat),
@@ -565,6 +642,9 @@ def my_cat_page(
             "breed_options": adoption_context["breed_options"],
             "color_options": adoption_context["color_options"],
             "show_growth_guide": show_growth_guide,
+            "exp_progress": exp_progress,
+            "skill_badges": skill_badges,
+            "training_actions": training_actions,
         },
     )
 
@@ -635,15 +715,42 @@ async def my_cat_feed_async(request: Request, raw_input: str = Form(...)):
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
         raise HTTPException(status_code=400, detail="请先领养第一只猫")
-    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 5):
-        raise HTTPException(status_code=400, detail="这只猫已经喂满了 5 次，无法继续喂食，但可以继续对话。")
+    can_feed, reason = get_feed_gate_status(cat)
+    if not can_feed:
+        raise HTTPException(status_code=400, detail=reason)
     parsed_url = extract_first_url(raw_input) or raw_input.strip()
     if not is_douyin_url(parsed_url):
         raise HTTPException(status_code=400, detail="请输入抖音作品链接")
 
     task = create_async_task("feed", int(cat["id"]))
-    asyncio.create_task(run_feed_task(task["id"], cat, parsed_url, settings))
+    asyncio.create_task(run_feed_task(task["id"], cat, parsed_url, settings, str(current_user["username"])))
     return JSONResponse({"task_id": task["id"], "status": task["status"], "message": "喂养任务已创建"})
+
+
+@app.post("/my-cat/train")
+def my_cat_train(request: Request, action_key: str = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login", error="请先登录", extra={"next": "/my-cat"})
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        return redirect_with_message("/my-cat", error="请先领养第一只猫")
+    try:
+        result = perform_daily_training(int(cat["id"]), action_key)
+    except Exception as exc:
+        return redirect_with_message("/my-cat", error=str(exc))
+    action = result["action"]
+    updated_cat = result["cat"]
+    remaining = max(0, int(updated_cat.get("exp_to_next") or 0) - int(updated_cat.get("exp") or 0))
+    if result["exp_full"]:
+        return redirect_with_message(
+            "/my-cat",
+            message=f"{action['label']}完成，经验条已满，现在可以喂视频让 {updated_cat['name']} 升级了",
+        )
+    return redirect_with_message(
+        "/my-cat",
+        message=f"{action['label']}完成，获得 {result['exp_gain']} 点经验，还差 {remaining} 点经验才能喂视频",
+    )
 
 
 @app.get("/api/tasks/{task_id}")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -30,6 +31,40 @@ DEFAULT_SETTINGS = {
     "gitee_token": "",
     "gitee_custom_url": "",
     "extra_upload_token": "",
+}
+MAX_CAT_LEVEL = 6
+DEFAULT_EXP_TO_NEXT = 100
+DAILY_TRAINING_ACTIONS: dict[str, dict[str, Any]] = {
+    "sunbath": {
+        "label": "日常晒太阳",
+        "exp_gain": 18,
+        "description": "猫族经典，晒太阳时喵力自然恢复。",
+        "summary": "晒了一会儿太阳，毛茸茸的身体慢慢暖起来了，喵力也在静静回升。",
+    },
+    "hunt": {
+        "label": "捕猎修炼",
+        "exp_gain": 24,
+        "description": "追逐和捕猎动作提升喵力。",
+        "summary": "完成了一轮追逐和扑击练习，反应和爆发力都更稳了。",
+    },
+    "groom": {
+        "label": "舔毛冥想",
+        "exp_gain": 30,
+        "description": "舔毛动作是喵师最高效的冥想方式。",
+        "summary": "通过舔毛和整理呼吸进入冥想状态，心绪沉静下来，经验涨得很快。",
+    },
+    "knead": {
+        "label": "踩奶仪式",
+        "exp_gain": 26,
+        "description": "幼年喵师突破瓶颈时的重要仪式。",
+        "summary": "认真完成了一次踩奶仪式，像是在为下一次突破提前蓄力。",
+    },
+    "purr": {
+        "label": "呼噜共鸣",
+        "exp_gain": 22,
+        "description": "集体修炼时通过呼噜声形成共振，来增长经验。",
+        "summary": "呼噜声和同伴的节奏慢慢共振，经验在安静的共鸣里一点点积累。",
+    },
 }
 
 
@@ -157,7 +192,11 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 stage TEXT NOT NULL DEFAULT '初始态',
                 feed_count INTEGER NOT NULL DEFAULT 0,
-                max_feed_count INTEGER NOT NULL DEFAULT 10,
+                max_feed_count INTEGER NOT NULL DEFAULT 6,
+                level INTEGER NOT NULL DEFAULT 0,
+                exp INTEGER NOT NULL DEFAULT 0,
+                exp_to_next INTEGER NOT NULL DEFAULT 100,
+                learned_skills_json TEXT NOT NULL DEFAULT '[]',
                 wisdom INTEGER NOT NULL DEFAULT 10,
                 grit INTEGER NOT NULL DEFAULT 10,
                 creativity INTEGER NOT NULL DEFAULT 10,
@@ -172,6 +211,9 @@ def init_db() -> None:
                 is_public INTEGER NOT NULL DEFAULT 0,
                 available_for_adoption INTEGER NOT NULL DEFAULT 0,
                 released_at TEXT NOT NULL DEFAULT '',
+                highest_level_owner_id INTEGER NOT NULL DEFAULT 0,
+                highest_level_owner_name TEXT NOT NULL DEFAULT '',
+                highest_level_reached INTEGER NOT NULL DEFAULT 0,
                 final_persona_json TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -195,6 +237,7 @@ def init_db() -> None:
                 creativity_delta INTEGER NOT NULL DEFAULT 0,
                 agility_delta INTEGER NOT NULL DEFAULT 0,
                 cooperation_delta INTEGER NOT NULL DEFAULT 0,
+                learned_skill TEXT NOT NULL DEFAULT '',
                 model1_output TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(cat_id) REFERENCES cats(id)
@@ -223,6 +266,14 @@ def init_db() -> None:
         ensure_column(conn, "cats", "available_for_adoption", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "cats", "released_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "cats", "final_persona_json", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "cats", "level", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cats", "exp", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cats", "exp_to_next", "INTEGER NOT NULL DEFAULT 100")
+        ensure_column(conn, "cats", "learned_skills_json", "TEXT NOT NULL DEFAULT '[]'")
+        ensure_column(conn, "cats", "highest_level_owner_id", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cats", "highest_level_owner_name", "TEXT NOT NULL DEFAULT ''")
+        ensure_column(conn, "cats", "highest_level_reached", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cat_feed_records", "learned_skill", "TEXT NOT NULL DEFAULT ''")
 
         # 迁移：移除 cats 表 user_id 的 UNIQUE 约束 (SQLite 需要通过重建表实现)
         rows = conn.execute("PRAGMA table_info(cats)").fetchall()
@@ -231,13 +282,73 @@ def init_db() -> None:
             has_unique_userid = any(idx["unique"] == 1 and "user_id" in [info["name"] for info in conn.execute(f"PRAGMA index_info({idx['name']})").fetchall()] for idx in indexes)
             if has_unique_userid:
                 rebuild_cats_table_without_user_unique(conn)
-            conn.execute("UPDATE cats SET max_feed_count = 5 WHERE max_feed_count != 5")
+            conn.execute("UPDATE cats SET max_feed_count = ? WHERE max_feed_count != ?", (MAX_CAT_LEVEL, MAX_CAT_LEVEL))
+            conn.execute(
+                """
+                UPDATE cats
+                SET level = CASE
+                    WHEN COALESCE(level, 0) = 0 AND COALESCE(feed_count, 0) > 0 THEN MIN(COALESCE(feed_count, 0), ?)
+                    ELSE MIN(COALESCE(level, 0), ?)
+                END
+                """,
+                (MAX_CAT_LEVEL, MAX_CAT_LEVEL),
+            )
+            conn.execute(
+                """
+                UPDATE cats
+                SET learned_skills_json = CASE
+                    WHEN TRIM(COALESCE(learned_skills_json, '')) = '' THEN '[]'
+                    ELSE learned_skills_json
+                END,
+                    highest_level_owner_id = CASE
+                        WHEN COALESCE(highest_level_owner_id, 0) = 0 THEN user_id
+                        ELSE highest_level_owner_id
+                    END,
+                    highest_level_owner_name = CASE
+                        WHEN TRIM(COALESCE(highest_level_owner_name, '')) = '' THEN COALESCE(
+                            (SELECT username FROM users WHERE users.id = cats.user_id LIMIT 1),
+                            ''
+                        )
+                        ELSE highest_level_owner_name
+                    END,
+                    highest_level_reached = MAX(COALESCE(highest_level_reached, 0), COALESCE(level, 0))
+                """
+            )
+            conn.execute(
+                """
+                UPDATE cats
+                SET exp_to_next = CASE WHEN level >= ? THEN 0 ELSE ? END
+                """,
+                (MAX_CAT_LEVEL, DEFAULT_EXP_TO_NEXT),
+            )
+            conn.execute(
+                """
+                UPDATE cats
+                SET exp = CASE
+                    WHEN level >= ? THEN 0
+                    ELSE MIN(COALESCE(exp, 0), COALESCE(exp_to_next, ?))
+                END
+                """,
+                (MAX_CAT_LEVEL, DEFAULT_EXP_TO_NEXT),
+            )
             conn.execute(
                 """
                 UPDATE cats
                 SET overall_power = COALESCE(wisdom, 0) + COALESCE(grit, 0) + COALESCE(creativity, 0)
                     + COALESCE(agility, 0) + COALESCE(cooperation, 0)
                 """
+            )
+            conn.execute(
+                """
+                UPDATE cats
+                SET stage = CASE
+                    WHEN available_for_adoption = 1 THEN '待领养'
+                    WHEN level >= ? OR feed_count >= max_feed_count THEN '已满级'
+                    WHEN level > 0 OR feed_count > 0 THEN '成长中'
+                    ELSE '初始态'
+                END
+                """,
+                (MAX_CAT_LEVEL,),
             )
         conn.execute(
             """
@@ -277,7 +388,11 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
             name TEXT NOT NULL,
             stage TEXT NOT NULL DEFAULT '初始态',
             feed_count INTEGER NOT NULL DEFAULT 0,
-            max_feed_count INTEGER NOT NULL DEFAULT 5,
+            max_feed_count INTEGER NOT NULL DEFAULT 6,
+            level INTEGER NOT NULL DEFAULT 0,
+            exp INTEGER NOT NULL DEFAULT 0,
+            exp_to_next INTEGER NOT NULL DEFAULT 100,
+            learned_skills_json TEXT NOT NULL DEFAULT '[]',
             wisdom INTEGER NOT NULL DEFAULT 10,
             grit INTEGER NOT NULL DEFAULT 10,
             creativity INTEGER NOT NULL DEFAULT 10,
@@ -292,6 +407,9 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
             is_public INTEGER NOT NULL DEFAULT 0,
             available_for_adoption INTEGER NOT NULL DEFAULT 0,
             released_at TEXT NOT NULL DEFAULT '',
+            highest_level_owner_id INTEGER NOT NULL DEFAULT 0,
+            highest_level_owner_name TEXT NOT NULL DEFAULT '',
+            highest_level_reached INTEGER NOT NULL DEFAULT 0,
             final_persona_json TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -302,14 +420,30 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
     conn.execute(
         """
         INSERT INTO cats_new (
-            id, user_id, cat_no, name, stage, feed_count, max_feed_count,
+            id, user_id, cat_no, name, stage, feed_count, max_feed_count, level, exp, exp_to_next, learned_skills_json,
             wisdom, grit, creativity, agility, cooperation, overall_power,
             image_url, personality, story_summary, latest_summary,
             is_active, is_public, available_for_adoption, released_at, final_persona_json,
+            highest_level_owner_id, highest_level_owner_name, highest_level_reached,
             created_at, updated_at
         )
         SELECT
-            id, user_id, cat_no, name, stage, feed_count, 5,
+            id, user_id, cat_no, name,
+            CASE
+                WHEN COALESCE(available_for_adoption, 0) = 1 THEN '待领养'
+                WHEN MIN(COALESCE(feed_count, 0), 6) >= 6 THEN '已满级'
+                WHEN COALESCE(feed_count, 0) > 0 THEN '成长中'
+                ELSE COALESCE(stage, '初始态')
+            END,
+            feed_count,
+            6,
+            MIN(COALESCE(feed_count, 0), 6),
+            CASE WHEN MIN(COALESCE(feed_count, 0), 6) >= 6 THEN 0 ELSE MIN(COALESCE(exp, 0), 100) END,
+            CASE WHEN MIN(COALESCE(feed_count, 0), 6) >= 6 THEN 0 ELSE 100 END,
+            CASE
+                WHEN TRIM(COALESCE(learned_skills_json, '')) = '' THEN '[]'
+                ELSE learned_skills_json
+            END,
             COALESCE(wisdom, 10), COALESCE(grit, 10), COALESCE(creativity, 10),
             COALESCE(agility, 10), COALESCE(cooperation, 10),
             COALESCE(wisdom, 0) + COALESCE(grit, 0) + COALESCE(creativity, 0)
@@ -317,6 +451,9 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
             COALESCE(image_url, ''), COALESCE(personality, ''), COALESCE(story_summary, ''),
             COALESCE(latest_summary, ''), COALESCE(is_active, 1), COALESCE(is_public, 0),
             COALESCE(available_for_adoption, 0), COALESCE(released_at, ''), COALESCE(final_persona_json, ''),
+            COALESCE(highest_level_owner_id, user_id),
+            COALESCE(NULLIF(highest_level_owner_name, ''), (SELECT username FROM users WHERE users.id = cats.user_id LIMIT 1), ''),
+            MAX(COALESCE(highest_level_reached, 0), MIN(COALESCE(feed_count, 0), 6)),
             created_at, updated_at
         FROM cats
         """
@@ -602,6 +739,44 @@ def clamp_stat(value: int) -> int:
     return max(0, min(100, int(value)))
 
 
+def compute_exp_to_next(level: int) -> int:
+    if int(level) >= MAX_CAT_LEVEL:
+        return 0
+    return DEFAULT_EXP_TO_NEXT
+
+
+def parse_skill_list(raw: str) -> list[str]:
+    if not raw.strip():
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(data, list):
+        return []
+    cleaned: list[str] = []
+    for item in data:
+        text = str(item).strip()
+        if text and text not in cleaned:
+            cleaned.append(text)
+    return cleaned
+
+
+def dump_skill_list(skills: list[str]) -> str:
+    cleaned = [str(skill).strip() for skill in skills if str(skill).strip()]
+    return json.dumps(cleaned, ensure_ascii=False)
+
+
+def build_cat_stage(level: int, feed_count: int, max_feed_count: int, available_for_adoption: int = 0) -> str:
+    if int(available_for_adoption):
+        return "待领养"
+    if int(level) >= MAX_CAT_LEVEL or int(feed_count) >= int(max_feed_count):
+        return "已满级"
+    if int(level) > 0 or int(feed_count) > 0:
+        return "成长中"
+    return "初始态"
+
+
 def compute_overall_power(
     wisdom: int,
     grit: int,
@@ -623,7 +798,11 @@ def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, An
         "name": profile.get("name") or f"{base_name}的小猫",
         "stage": "初始态",
         "feed_count": 0,
-        "max_feed_count": 5,
+        "max_feed_count": MAX_CAT_LEVEL,
+        "level": 0,
+        "exp": 0,
+        "exp_to_next": compute_exp_to_next(0),
+        "learned_skills_json": "[]",
         "wisdom": wisdom,
         "grit": grit,
         "creativity": creativity,
@@ -638,6 +817,9 @@ def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, An
         "is_public": 0,
         "available_for_adoption": 0,
         "released_at": "",
+        "highest_level_owner_id": user_id,
+        "highest_level_owner_name": username.strip(),
+        "highest_level_reached": 0,
         "created_at": now,
         "updated_at": now,
     }
@@ -649,15 +831,17 @@ def create_initial_cat_for_user(user_id: int, username: str, ai_data: dict[str, 
         conn.execute(
             """
             INSERT INTO cats (
-                user_id, cat_no, name, stage, feed_count, max_feed_count,
+                user_id, cat_no, name, stage, feed_count, max_feed_count, level, exp, exp_to_next, learned_skills_json,
                 wisdom, grit, creativity, agility, cooperation, overall_power,
                 image_url, personality, story_summary, latest_summary, is_active, is_public,
-                available_for_adoption, released_at, created_at, updated_at
+                available_for_adoption, released_at, highest_level_owner_id, highest_level_owner_name,
+                highest_level_reached, created_at, updated_at
             ) VALUES (
-                :user_id, :cat_no, :name, :stage, :feed_count, :max_feed_count,
+                :user_id, :cat_no, :name, :stage, :feed_count, :max_feed_count, :level, :exp, :exp_to_next, :learned_skills_json,
                 :wisdom, :grit, :creativity, :agility, :cooperation, :overall_power,
                 :image_url, :personality, :story_summary, :latest_summary, :is_active, :is_public,
-                :available_for_adoption, :released_at, :created_at, :updated_at
+                :available_for_adoption, :released_at, :highest_level_owner_id, :highest_level_owner_name,
+                :highest_level_reached, :created_at, :updated_at
             )
             """,
             payload,
@@ -786,7 +970,7 @@ def list_cat_feed_records(cat_id: int, limit: int = 20) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
-def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, Any]:
+def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any], current_owner_name: str = "") -> dict[str, Any]:
     now = utcnow()
     with get_connection() as conn:
         cat_row = conn.execute("SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)).fetchone()
@@ -797,6 +981,13 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, A
         max_feeds = int(cat["max_feed_count"])
         if next_feed_count > max_feeds:
             raise ValueError(f"这只猫已经喂满了 {max_feeds} 次，无法继续喂食，但可以继续对话。")
+        current_level = int(cat.get("level") or 0)
+        if current_level >= MAX_CAT_LEVEL:
+            raise ValueError("这只猫已经满级，不能继续喂养视频。")
+        exp_to_next = int(cat.get("exp_to_next") or compute_exp_to_next(current_level))
+        current_exp = int(cat.get("exp") or 0)
+        if current_exp < exp_to_next:
+            raise ValueError("经验条还没满，先完成日常修炼，再喂视频让它升级。")
 
         updated_stats = {
             "wisdom": clamp_stat(int(cat["wisdom"]) + int(feed_result.get("wisdom_delta") or 0)),
@@ -812,18 +1003,39 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, A
             updated_stats["agility"],
             updated_stats["cooperation"],
         )
-        stage = "成长中"
-        if next_feed_count >= max_feeds:
-            stage = "已满级"
+        learned_skills = parse_skill_list(str(cat.get("learned_skills_json") or ""))
+        learned_skill = str(feed_result.get("learned_skill") or "").strip()
+        if learned_skill and learned_skill not in learned_skills:
+            learned_skills.append(learned_skill)
+        next_level = min(MAX_CAT_LEVEL, current_level + 1)
+        next_exp = 0
+        next_exp_to_next = compute_exp_to_next(next_level)
+        owner_name = current_owner_name.strip()
+        if not owner_name:
+            owner_row = conn.execute("SELECT username FROM users WHERE id = ? LIMIT 1", (int(cat["user_id"]),)).fetchone()
+            owner_name = str((owner_row["username"] if owner_row else "") or "")
+        highest_level_reached = int(cat.get("highest_level_reached") or 0)
+        highest_level_owner_id = int(cat.get("highest_level_owner_id") or 0)
+        highest_level_owner_name = str(cat.get("highest_level_owner_name") or "")
+        if next_level > highest_level_reached:
+            highest_level_reached = next_level
+            highest_level_owner_id = int(cat["user_id"])
+            highest_level_owner_name = owner_name
+        stage = build_cat_stage(next_level, next_feed_count, max_feeds, int(cat.get("available_for_adoption") or 0))
+        latest_summary = str(feed_result.get("video_summary") or "").strip() or "这次喂养让它完成了一次新的突破。"
+        if learned_skill:
+            latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级，并学会技能「{learned_skill}」。"
+        else:
+            latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级。"
 
         conn.execute(
             """
             INSERT INTO cat_feed_records (
                 cat_id, feed_index, source_url, canonical_url, aweme_id, video_title, video_author,
                 video_cover_url, video_summary, tag_summary, wisdom_delta, grit_delta,
-                creativity_delta, agility_delta, cooperation_delta, model1_output, created_at
+                creativity_delta, agility_delta, cooperation_delta, learned_skill, model1_output, created_at
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -842,6 +1054,7 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, A
                 int(feed_result.get("creativity_delta") or 0),
                 int(feed_result.get("agility_delta") or 0),
                 int(feed_result.get("cooperation_delta") or 0),
+                str(feed_result.get("learned_skill") or ""),
                 str(feed_result.get("model1_output") or ""),
                 now,
             ),
@@ -852,12 +1065,19 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, A
             UPDATE cats
             SET stage = ?,
                 feed_count = ?,
+                level = ?,
+                exp = ?,
+                exp_to_next = ?,
+                learned_skills_json = ?,
                 wisdom = ?,
                 grit = ?,
                 creativity = ?,
                 agility = ?,
                 cooperation = ?,
                 overall_power = ?,
+                highest_level_owner_id = ?,
+                highest_level_owner_name = ?,
+                highest_level_reached = ?,
                 latest_summary = ?,
                 updated_at = ?
             WHERE id = ?
@@ -865,18 +1085,65 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, A
             (
                 stage,
                 next_feed_count,
+                next_level,
+                next_exp,
+                next_exp_to_next,
+                dump_skill_list(learned_skills),
                 updated_stats["wisdom"],
                 updated_stats["grit"],
                 updated_stats["creativity"],
                 updated_stats["agility"],
                 updated_stats["cooperation"],
                 overall_power,
-                str(feed_result.get("video_summary") or ""),
+                highest_level_owner_id,
+                highest_level_owner_name,
+                highest_level_reached,
+                latest_summary,
                 now,
                 cat_id,
             ),
         )
     return get_user_cat(int(cat["user_id"])) or {}
+
+
+def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
+    action = DAILY_TRAINING_ACTIONS.get(action_key)
+    if not action:
+        raise ValueError("未知的修炼方式")
+    now = utcnow()
+    with get_connection() as conn:
+        cat_row = conn.execute("SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)).fetchone()
+        if not cat_row:
+            raise ValueError("猫咪不存在")
+        cat = dict(cat_row)
+        level = int(cat.get("level") or 0)
+        if level >= MAX_CAT_LEVEL:
+            raise ValueError("这只猫已经满级，不需要继续修炼经验了。")
+        exp_to_next = int(cat.get("exp_to_next") or compute_exp_to_next(level))
+        current_exp = int(cat.get("exp") or 0)
+        new_exp = min(exp_to_next, current_exp + int(action["exp_gain"]))
+        latest_summary = f"{action['label']}完成，获得 {int(action['exp_gain'])} 点经验。{action['summary']}"
+        if new_exp >= exp_to_next:
+            latest_summary += f" 当前经验已满，可以喂第 {int(cat.get('feed_count') or 0) + 1} 个视频了。"
+        conn.execute(
+            """
+            UPDATE cats
+            SET exp = ?,
+                latest_summary = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (new_exp, latest_summary, now, cat_id),
+        )
+    updated_cat = get_cat_by_id(cat_id)
+    if not updated_cat:
+        raise ValueError("修炼后未找到猫咪数据")
+    return {
+        "cat": updated_cat,
+        "action": action,
+        "exp_gain": int(action["exp_gain"]),
+        "exp_full": int(updated_cat.get("exp") or 0) >= int(updated_cat.get("exp_to_next") or 0) > 0,
+    }
 
 
 def list_recent_users(limit: int = 8) -> list[dict[str, Any]]:
@@ -1137,11 +1404,15 @@ def adopt_plaza_cat(cat_id: int, new_user_id: int) -> dict[str, Any] | None:
                 is_public = 0,
                 available_for_adoption = 0,
                 released_at = '',
-                stage = CASE WHEN feed_count >= max_feed_count THEN '已满级' ELSE '成长中' END,
+                stage = CASE
+                    WHEN level >= ? OR feed_count >= max_feed_count THEN '已满级'
+                    WHEN level > 0 OR feed_count > 0 THEN '成长中'
+                    ELSE '初始态'
+                END,
                 updated_at = ?
             WHERE id = ?
             """,
-            (new_user_id, utcnow(), cat_id),
+            (new_user_id, MAX_CAT_LEVEL, utcnow(), cat_id),
         )
     return get_cat_by_id(cat_id)
 

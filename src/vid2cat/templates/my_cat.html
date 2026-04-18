@@ -55,6 +55,7 @@
                             <span class="pill muted">{{ owned.stage }}</span>
                         </div>
                         <div class="pill-row compact">
+                            <span class="pill muted">Lv.{{ owned.level }}</span>
                             <span class="pill muted">喂养 {{ owned.feed_count }}/{{ owned.max_feed_count }}</span>
                             <span class="pill muted">总属性 {{ owned.overall_power }}</span>
                         </div>
@@ -112,7 +113,7 @@
                 </div>
                 <div class="form-footer-hint">
                     <span class="pill muted">首次领养就会生成初始形象</span>
-                    <span class="section-hint">后续每次喂养仍会继续更新外观和性格</span>
+                    <span class="section-hint">之后先靠日常修炼攒满经验，再喂视频升级并学技能</span>
                 </div>
                 <div class="action-row">
                     <button type="submit" class="primary-btn">{{ "立即领养第一只猫" if needs_initial_adoption else "确认领养新猫" }}</button>
@@ -131,6 +132,7 @@
                     </div>
                     <div class="pill-row compact">
                         <span class="pill">编号：{{ cat.cat_no }}</span>
+                        <span class="pill muted">等级：{{ exp_progress.level }}/6</span>
                         <span class="pill muted">阶段：{{ cat.stage }}</span>
                         <span class="pill muted">剩余喂养 {{ remaining_feeds }} 次</span>
                         {% if cat.image_url %}
@@ -159,7 +161,13 @@
                         <div class="info-panel">
                             <div class="stats-row stats-row-tight">
                                 <div class="stat-box">
-                                    <span class="label">喂养进度</span>
+                                    <span class="label">当前等级</span>
+                                    <strong class="{% if exp_progress.level >= 6 %}limit-reached{% endif %}">
+                                        {{ exp_progress.level }}/6
+                                    </strong>
+                                </div>
+                                <div class="stat-box">
+                                    <span class="label">喂养次数</span>
                                     <strong class="{% if cat.feed_count >= cat.max_feed_count %}limit-reached{% endif %}">
                                         {{ cat.feed_count }}/{{ cat.max_feed_count }}
                                     </strong>
@@ -168,6 +176,50 @@
                                     <span class="label">总属性</span>
                                     <strong>{{ cat.overall_power }}</strong>
                                 </div>
+                            </div>
+                            <div class="exp-panel">
+                                <div class="section-title-row compact-row">
+                                    <div>
+                                        <h3>经验条</h3>
+                                        <span class="section-hint">
+                                            {% if exp_progress.exp_to_next > 0 %}
+                                            {{ exp_progress.exp }}/{{ exp_progress.exp_to_next }}
+                                            {% else %}
+                                            已满级
+                                            {% endif %}
+                                        </span>
+                                    </div>
+                                    {% if exp_progress.exp_to_next > 0 %}
+                                    <span class="pill{% if can_feed %} active{% else %} muted{% endif %}">
+                                        {% if can_feed %}已充满{% else %}还差 {{ exp_progress.remaining }}{% endif %}
+                                    </span>
+                                    {% else %}
+                                    <span class="pill active">满级完成</span>
+                                    {% endif %}
+                                </div>
+                                <div class="exp-bar">
+                                    <div class="exp-bar-fill" style="width: {{ exp_progress.percent }}%;"></div>
+                                </div>
+                                <p class="exp-panel-copy">{{ feed_gate_hint }}</p>
+                            </div>
+                            <div class="owner-panel">
+                                <h3>最高级原主人</h3>
+                                <p>@{{ cat.highest_level_owner_name or current_user.username }} 把它带到了 {{ cat.highest_level_reached or exp_progress.level }} 级。后续若等级没有再突破，这个名字就不会被改写。</p>
+                            </div>
+                            <div class="skill-panel">
+                                <div class="section-title-row compact-row">
+                                    <h3>已学会技能</h3>
+                                    <span class="section-hint">每喂一个视频学会一个技能，最多 6 个</span>
+                                </div>
+                                {% if skill_badges %}
+                                <div class="pill-row compact">
+                                    {% for skill in skill_badges %}
+                                    <span class="pill active">{{ skill }}</span>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <p>还没有学会技能，先把经验练满后喂第一个视频。</p>
+                                {% endif %}
                             </div>
                             <div class="persona-info">
                                 <h3>当前性格</h3>
@@ -180,6 +232,28 @@
                             <div class="latest-summary">
                                 <h3>最近一次变化</h3>
                                 <p>{{ cat.latest_summary or "还没有新的成长记录。" }}</p>
+                            </div>
+                        </div>
+
+                        <div class="info-panel">
+                            <div class="section-title-row compact-row">
+                                <div>
+                                    <h3>日常修炼</h3>
+                                    <span class="section-hint">先靠这些修炼把经验条练满，经验满了才能继续喂视频升级</span>
+                                </div>
+                            </div>
+                            <div class="training-grid">
+                                {% for action in training_actions %}
+                                <form action="/my-cat/train" method="POST" class="training-card">
+                                    <input type="hidden" name="action_key" value="{{ action.key }}">
+                                    <div class="training-card-body">
+                                        <strong>{{ action.label }}</strong>
+                                        <p>{{ action.description }}</p>
+                                        <span class="pill muted">经验 +{{ action.exp_gain }}</span>
+                                    </div>
+                                    <button type="submit" class="ghost-btn full-width">开始修炼</button>
+                                </form>
+                                {% endfor %}
                             </div>
                         </div>
 
@@ -230,15 +304,12 @@
                                 rows="3"
                                 placeholder="输入聊天内容，或粘贴抖音分享文案 / 链接"
                                 {% if not can_feed %}data-feed-locked="true"{% endif %}
+                                data-feed-locked-message="{{ feed_gate_hint }}"
                                 required
                             ></textarea>
                             <div class="interaction-footer">
                                 <span id="interaction-hint" class="section-hint">
-                                    {% if can_feed %}
-                                    检测到抖音链接时会自动进入喂养流程。
-                                    {% else %}
-                                    当前已喂满 5 次，只保留聊天功能。
-                                    {% endif %}
+                                    {{ feed_gate_hint }}
                                 </span>
                                 <button id="interaction-submit-btn" type="submit" class="accent-btn">发送</button>
                             </div>
@@ -250,7 +321,7 @@
             <aside class="content-card side-card">
                 <div class="section-title-row">
                     <h2>当前属性</h2>
-                    <span class="section-hint">每次喂养后都会变化</span>
+                    <span class="section-hint">修炼负责经验，喂养负责升级与技能突破</span>
                 </div>
                 <div class="profile-grid">
                     {% for item in stat_cards %}
@@ -276,12 +347,12 @@
                     <p>第一次领养就要先选颜色和品种；如果没有图片，系统会自动根据预设提示词生成形象。</p>
                 </div>
                 <div class="moment-item">
-                    <strong>2. 再喂养</strong>
-                    <p>在统一输入框里贴抖音链接，就会触发解析、属性变化和新形象更新。</p>
+                    <strong>2. 先修炼再喂养</strong>
+                    <p>日常晒太阳、捕猎修炼、舔毛冥想、踩奶仪式、呼噜共鸣都能涨经验，经验条满了才能喂视频升级。</p>
                 </div>
                 <div class="moment-item">
-                    <strong>3. 最多 5 次</strong>
-                    <p>喂满 5 次后停止喂食，但猫咪仍然可以继续和你聊天。</p>
+                    <strong>3. 最多 6 次突破</strong>
+                    <p>猫咪从 0 级升到 6 级，最多喂 6 个视频；每喂一个视频都会升级、学会一个技能，并刷新形象。</p>
                 </div>
             </div>
         </section>
@@ -304,6 +375,9 @@
                     <div class="pill-row compact">
                         <span class="pill muted">作者：{{ record.video_author or "未知作者" }}</span>
                         <span class="pill muted">标签：{{ record.tag_summary or "成长事件" }}</span>
+                        {% if record.learned_skill %}
+                        <span class="pill active">学会技能：{{ record.learned_skill }}</span>
+                        {% endif %}
                     </div>
                     <p>{{ record.video_summary }}</p>
                     {% if record.delta_items %}

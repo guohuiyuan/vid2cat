@@ -53,15 +53,21 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const value = interactionInput.value.trim();
         const feedLocked = interactionInput.dataset.feedLocked === "true";
+        const lockedMessage = interactionInput.dataset.feedLockedMessage || "当前暂时不能喂养。";
         const isFeed = containsDouyinUrl(value);
         if (isFeed && !feedLocked) {
             interactionSubmitButton.textContent = "开始喂养";
             interactionHint.textContent = "检测到抖音链接，提交后会进入喂养和形象更新流程。";
             return;
         }
+        if (isFeed && feedLocked) {
+            interactionSubmitButton.textContent = "暂不能喂养";
+            interactionHint.textContent = lockedMessage;
+            return;
+        }
         interactionSubmitButton.textContent = "发送";
         interactionHint.textContent = feedLocked
-            ? "当前已喂满 5 次，只保留聊天功能。"
+            ? lockedMessage
             : "输入普通文字会直接进入聊天。";
     };
 
@@ -168,7 +174,7 @@ document.addEventListener("DOMContentLoaded", () => {
             try {
                 if (isFeed) {
                     if (feedLocked) {
-                        throw new Error("这只猫已经喂满 5 次，不能继续喂养，只能聊天。");
+                        throw new Error(interactionInput.dataset.feedLockedMessage || "当前暂时不能喂养，只能聊天。");
                     }
                     await submitFeed(content);
                 } else {

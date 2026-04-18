@@ -51,7 +51,7 @@
                 <div class="market-card-header">
                     <div>
                         <h3 class="cat-name">{{ card.cat_name }}</h3>
-                        <p class="market-owner">原主人：@{{ card.username }}</p>
+                        <p class="market-owner">最高级原主人：@{{ card.highest_level_owner_name }}（{{ card.highest_level_reached }} 级）</p>
                     </div>
                     <span class="pill muted">{{ card.stage }}</span>
                 </div>
@@ -59,8 +59,10 @@
                 <p class="card-summary">{{ card.summary }}</p>
 
                 <div class="pill-row compact market-meta-row">
+                    <span class="pill muted">Lv.{{ card.level }}/6</span>
                     <span class="pill muted">总属性 {{ card.overall_power }}</span>
                     <span class="pill muted">喂养 {{ card.feed_count }}/{{ card.max_feed_count }}</span>
+                    <span class="pill muted">技能 {{ card.learned_skills|length }}</span>
                     {% if card.available_for_adoption %}
                     <span class="pill active">待领养</span>
                     {% else %}
