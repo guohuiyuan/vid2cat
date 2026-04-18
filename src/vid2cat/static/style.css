@@ -237,11 +237,10 @@ button, .primary-btn, .accent-btn, .ghost-btn, .anchor-btn {
 
 .cat-switch-card {
     display: grid;
-    grid-template-columns: 80px 1fr auto;
+    grid-template-columns: 96px minmax(0, 1fr);
     gap: 14px;
-    align-items: center;
+    align-items: start;
     transition: all 0.2s ease;
-    cursor: pointer;
 }
 
 .cat-switch-card.active {
@@ -251,8 +250,8 @@ button, .primary-btn, .accent-btn, .ghost-btn, .anchor-btn {
 }
 
 .cat-switch-thumb {
-    width: 80px;
-    height: 80px;
+    width: 96px;
+    height: 96px;
     border-radius: 20px;
     overflow: hidden;
     background: #f0f4f8; /* 柔和的天空蓝底色 */
@@ -267,8 +266,25 @@ button, .primary-btn, .accent-btn, .ghost-btn, .anchor-btn {
     font-size: 28px; font-weight: 800; color: var(--primary);
 }
 
-.cat-switch-body { display: flex; flex-direction: column; gap: 6px; }
-.cat-switch-top h3 { margin: 0; font-size: 16px; }
+.cat-switch-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cat-switch-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.cat-switch-top h3 { margin: 0; font-size: 16px; min-width: 0; }
+.cat-switch-top .pill { flex-shrink: 0; }
+.cat-switch-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.cat-switch-actions form {
+    margin: 0;
+}
+
+.cat-switch-actions .ghost-btn,
+.cat-switch-actions .pill {
+    min-width: 96px;
+}
 
 /* 2. 主展示区布局 */
 .cat-stage-layout {
@@ -538,6 +554,43 @@ select:focus, input:focus { border-color: var(--primary); }
     justify-content: flex-end;
 }
 
+.auth-dialog {
+    position: relative;
+    z-index: 1;
+    width: min(640px, 100%);
+    max-height: min(88vh, 760px);
+    overflow-y: auto;
+    border-radius: 28px;
+}
+
+.auth-tab-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+}
+
+.auth-tab-btn {
+    background: #fff;
+    color: var(--text-main);
+    border: var(--border-thick);
+    box-shadow: none;
+}
+
+.auth-tab-btn.active {
+    background: #fff4df;
+    border-color: var(--primary);
+    color: var(--primary-dark);
+}
+
+.auth-panel {
+    display: none;
+}
+
+.auth-panel.active {
+    display: block;
+}
+
 .guide-dialog {
     position: relative;
     z-index: 1;
@@ -659,9 +712,42 @@ select:focus, input:focus { border-color: var(--primary); }
     top: 0;
     z-index: 100;
 }
-.header-container { max-width: 1160px; margin: 0 auto; padding: 0 20px; height: 64px; display: flex; justify-content: space-between; align-items: center; }
+.header-container { max-width: 1160px; margin: 0 auto; padding: 10px 20px; min-height: 64px; display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .site-logo { font-size: 20px; font-weight: 900; color: var(--primary-dark); }
-.nav-links { display: flex; gap: 20px; align-items: center; font-weight: 700; }
+.nav-links { display: flex; gap: 16px; align-items: center; justify-content: space-between; flex: 1; font-weight: 700; min-width: 0; }
+.nav-primary-links,
+.nav-auth-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.nav-primary-links a {
+    white-space: nowrap;
+}
+
+.nav-auth-actions .ghost-btn,
+.nav-auth-actions .accent-btn {
+    padding: 10px 16px;
+}
+
+.menu-action-btn {
+    display: block;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    color: var(--text-main);
+    border: none;
+    box-shadow: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+}
+
+.menu-action-btn:hover {
+    background: #faf7f2;
+}
+
 .nav-links a:hover { color: var(--primary); }
 
 /* 响应式调整 */
@@ -671,6 +757,20 @@ select:focus, input:focus { border-color: var(--primary); }
     .dialog-overlay {
         padding: 16px;
     }
+    .header-container,
+    .nav-links {
+        align-items: stretch;
+        flex-direction: column;
+    }
+    .nav-links {
+        width: 100%;
+        gap: 12px;
+    }
+    .nav-primary-links,
+    .nav-auth-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
     .hover-info-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
@@ -678,14 +778,23 @@ select:focus, input:focus { border-color: var(--primary); }
 @media (max-width: 600px) {
     .market-grid { grid-template-columns: 1fr; }
     .action-row { flex-direction: column; }
-    .cat-switch-card { grid-template-columns: 60px 1fr; }
-    .cat-switch-actions { grid-column: 1 / -1; }
+    .cat-switch-card { grid-template-columns: 72px 1fr; }
+    .cat-switch-thumb { width: 72px; height: 72px; border-radius: 16px; }
+    .cat-switch-actions { grid-column: 1 / -1; width: 100%; }
+    .cat-switch-actions .ghost-btn,
+    .cat-switch-actions form,
+    .cat-switch-actions form button { width: 100%; }
     .adoption-dialog {
         width: 100%;
         max-height: 100vh;
         border-radius: 24px;
     }
     .guide-dialog {
+        width: 100%;
+        max-height: 100vh;
+        border-radius: 24px;
+    }
+    .auth-dialog {
         width: 100%;
         max-height: 100vh;
         border-radius: 24px;
@@ -718,5 +827,19 @@ select:focus, input:focus { border-color: var(--primary); }
     .panel-actions-right form,
     .danger-btn {
         width: 100%;
+    }
+    .nav-primary-links,
+    .nav-auth-actions {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        padding-bottom: 4px;
+    }
+    .nav-primary-links a,
+    .nav-auth-actions button {
+        white-space: nowrap;
+    }
+    .auth-tab-row {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
     }
 }

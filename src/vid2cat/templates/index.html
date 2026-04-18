@@ -13,8 +13,10 @@
         <div class="header-container">
             <a href="https://github.com/guohuiyuan/vid2cat/" class="site-logo" target="_blank" rel="noopener noreferrer">vid2cat</a>
             <nav class="nav-links">
-                <a href="/my-cat">我的猫</a>
-                <a href="/plaza">猫咪市场</a>
+                <div class="nav-primary-links">
+                    <a href="/my-cat">我的猫</a>
+                    <a href="/plaza">猫咪市场</a>
+                </div>
                 {% if current_user %}
                 <div class="user-dropdown">
                     <button class="user-dropdown-btn">
@@ -28,8 +30,8 @@
                         {% endfor %}
                         {% else %}
                         {% if current_user.is_guest %}
-                        <a href="/register">注册保存进度</a>
-                        <a href="/login">登录已有账号</a>
+                        <button type="button" class="menu-action-btn" data-open-auth="register">注册保存进度</button>
+                        <button type="button" class="menu-action-btn" data-open-auth="login">登录已有账号</button>
                         {% endif %}
                         {% if admin_user %}
                         <a href="/admin">后台管理</a>
@@ -39,8 +41,11 @@
                     </div>
                 </div>
                 {% else %}
-                <a href="/login" class="ghost-btn">登录</a>
-                <a href="/register" class="accent-btn">注册</a>
+                <div class="nav-auth-actions">
+                    <button type="button" class="ghost-btn" data-open-auth="admin">管理员</button>
+                    <button type="button" class="ghost-btn" data-open-auth="login">登录</button>
+                    <button type="button" class="accent-btn" data-open-auth="register">注册</button>
+                </div>
                 {% endif %}
             </nav>
         </div>
@@ -67,7 +72,7 @@
                         <a class="primary-btn anchor-btn" href="/my-cat">进入我的猫</a>
                         {% else %}
                         <a class="primary-btn anchor-btn" href="/my-cat">直接开始养猫</a>
-                        <a class="ghost-btn" href="/login">登录已有账号</a>
+                        <button type="button" class="ghost-btn" data-open-auth="login">登录已有账号</button>
                         {% endif %}
                         <a class="ghost-btn" href="/plaza">浏览猫咪市场</a>
                     </div>
@@ -75,7 +80,7 @@
                 <div class="feature-panel">
                     <div class="feature-item">
                         <span class="feature-label">首次领养</span>
-                        <strong>支持自选颜色、品种和可选图片</strong>
+                        <strong>支持自选颜色、品种并自动生成初始形象</strong>
                     </div>
                     <div class="feature-item">
                         <span class="feature-label">互动方式</span>
@@ -158,5 +163,81 @@
         </section>
     </div>
     {% endblock %}
+    {% if not current_user or current_user.is_guest %}
+    <div
+        id="auth-dialog"
+        class="dialog-overlay hidden"
+        data-auto-open="{% if request.query_params.get('auth_dialog') %}true{% else %}false{% endif %}"
+        data-initial-auth-tab="{{ request.query_params.get('auth_tab', 'login') }}"
+        aria-hidden="true"
+    >
+        <div class="dialog-backdrop" data-close-auth></div>
+        <section class="content-card auth-dialog" role="dialog" aria-modal="true" aria-labelledby="auth-dialog-title">
+            <div class="dialog-header">
+                <div>
+                    <h2 id="auth-dialog-title">账号中心</h2>
+                    <span class="section-hint">登录、注册和管理员入口统一放在这里，手机端也更清晰</span>
+                </div>
+                <button type="button" class="dialog-close-btn" data-close-auth aria-label="关闭账号对话框">×</button>
+            </div>
+            <div class="auth-tab-row">
+                <button type="button" class="auth-tab-btn active" data-auth-tab="login">登录</button>
+                <button type="button" class="auth-tab-btn" data-auth-tab="register">注册</button>
+                <button type="button" class="auth-tab-btn" data-auth-tab="admin">管理员</button>
+            </div>
+
+            <div class="auth-panel active" data-auth-panel="login">
+                <div class="section-title-row compact-row">
+                    <div>
+                        <h3>登录账号</h3>
+                        <span class="section-hint">请输入邮箱和密码。登录后可继续当前养猫进度。</span>
+                    </div>
+                </div>
+                <form class="stack-form" action="/login" method="post">
+                    <input type="hidden" name="next" value="{{ request.url.path }}">
+                    <input type="email" name="email" placeholder="邮箱" required>
+                    <input type="password" name="password" placeholder="密码" required>
+                    {% if current_user and current_user.is_guest %}
+                    <label class="checkbox-row">
+                        <input type="checkbox" name="takeover_guest" value="1" checked>
+                        <span>登录后接管当前游客进度</span>
+                    </label>
+                    {% endif %}
+                    <button class="primary-btn full-width" type="submit">立即登录</button>
+                </form>
+            </div>
+
+            <div class="auth-panel" data-auth-panel="register">
+                <div class="section-title-row compact-row">
+                    <div>
+                        <h3>注册账号</h3>
+                        <span class="section-hint">注册成功后自动登录；若当前是游客模式，会自动接管进度。</span>
+                    </div>
+                </div>
+                <form class="stack-form" action="/register" method="post">
+                    <input type="text" name="username" placeholder="用户名" required>
+                    <input type="email" name="email" placeholder="邮箱" required>
+                    <input type="password" name="password" placeholder="密码" required>
+                    <button class="accent-btn full-width" type="submit">立即注册</button>
+                </form>
+            </div>
+
+            <div class="auth-panel" data-auth-panel="admin">
+                <div class="section-title-row compact-row">
+                    <div>
+                        <h3>管理员登录</h3>
+                        <span class="section-hint">管理员入口已合并到登录对话框中。</span>
+                    </div>
+                </div>
+                <form class="stack-form" action="/admin/login" method="post">
+                    <input type="text" name="username" placeholder="管理员用户名" required>
+                    <input type="password" name="password" placeholder="管理员密码" required>
+                    <button class="primary-btn full-width" type="submit">登录后台</button>
+                </form>
+            </div>
+        </section>
+    </div>
+    {% endif %}
+    <script src="/static/app.js"></script>
 </body>
 </html>

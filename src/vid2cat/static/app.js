@@ -12,6 +12,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const adoptionCloseButtons = document.querySelectorAll("[data-close-adoption]");
     const growthGuideDialog = document.getElementById("growth-guide-dialog");
     const growthGuideCloseButtons = document.querySelectorAll("[data-close-growth-guide]");
+    const authDialog = document.getElementById("auth-dialog");
+    const authOpenButtons = document.querySelectorAll("[data-open-auth]");
+    const authCloseButtons = document.querySelectorAll("[data-close-auth]");
+    const authTabButtons = document.querySelectorAll("[data-auth-tab]");
+    const authPanels = document.querySelectorAll("[data-auth-panel]");
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
 
     let activeTaskId = null;
@@ -39,45 +44,91 @@ document.addEventListener("DOMContentLoaded", () => {
 
     scrollChatToBottom();
 
+    const updateDialogBodyState = () => {
+        const hasVisibleDialog = [authDialog, adoptionDialog, growthGuideDialog].some(
+            (dialog) => dialog && !dialog.classList.contains("hidden"),
+        );
+        document.body.classList.toggle("dialog-open", hasVisibleDialog);
+    };
+
+    const setAuthTab = (tabName) => {
+        if (!authDialog) return;
+        authTabButtons.forEach((button) => {
+            button.classList.toggle("active", button.dataset.authTab === tabName);
+        });
+        authPanels.forEach((panel) => {
+            panel.classList.toggle("active", panel.dataset.authPanel === tabName);
+        });
+    };
+
+    const openAuthDialog = (tabName = "login") => {
+        if (!authDialog) return;
+        setAuthTab(tabName);
+        authDialog.classList.remove("hidden");
+        authDialog.setAttribute("aria-hidden", "false");
+        updateDialogBodyState();
+    };
+
+    const closeAuthDialog = () => {
+        if (!authDialog) return;
+        authDialog.classList.add("hidden");
+        authDialog.setAttribute("aria-hidden", "true");
+        updateDialogBodyState();
+    };
+
     const openAdoptionDialog = () => {
         if (!adoptionDialog) return;
+        closeAuthDialog();
         if (growthGuideDialog) {
             growthGuideDialog.classList.add("hidden");
             growthGuideDialog.setAttribute("aria-hidden", "true");
         }
         adoptionDialog.classList.remove("hidden");
         adoptionDialog.setAttribute("aria-hidden", "false");
-        document.body.classList.add("dialog-open");
+        updateDialogBodyState();
     };
 
     const closeAdoptionDialog = () => {
         if (!adoptionDialog) return;
         adoptionDialog.classList.add("hidden");
         adoptionDialog.setAttribute("aria-hidden", "true");
-        if (growthGuideDialog?.classList.contains("hidden")) {
-            document.body.classList.remove("dialog-open");
-        }
+        updateDialogBodyState();
     };
 
     const openGrowthGuideDialog = () => {
         if (!growthGuideDialog) return;
+        closeAuthDialog();
         if (adoptionDialog) {
             adoptionDialog.classList.add("hidden");
             adoptionDialog.setAttribute("aria-hidden", "true");
         }
         growthGuideDialog.classList.remove("hidden");
         growthGuideDialog.setAttribute("aria-hidden", "false");
-        document.body.classList.add("dialog-open");
+        updateDialogBodyState();
     };
 
     const closeGrowthGuideDialog = () => {
         if (!growthGuideDialog) return;
         growthGuideDialog.classList.add("hidden");
         growthGuideDialog.setAttribute("aria-hidden", "true");
-        if (adoptionDialog?.classList.contains("hidden")) {
-            document.body.classList.remove("dialog-open");
-        }
+        updateDialogBodyState();
     };
+
+    authOpenButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            openAuthDialog(button.dataset.openAuth || "login");
+        });
+    });
+
+    authCloseButtons.forEach((button) => {
+        button.addEventListener("click", closeAuthDialog);
+    });
+
+    authTabButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            setAuthTab(button.dataset.authTab || "login");
+        });
+    });
 
     adoptionOpenButtons.forEach((button) => {
         button.addEventListener("click", openAdoptionDialog);
@@ -91,7 +142,9 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", closeGrowthGuideDialog);
     });
 
-    if (adoptionDialog?.dataset.autoOpen === "true") {
+    if (authDialog?.dataset.autoOpen === "true") {
+        openAuthDialog(authDialog.dataset.initialAuthTab || "login");
+    } else if (adoptionDialog?.dataset.autoOpen === "true") {
         openAdoptionDialog();
     } else if (growthGuideDialog?.dataset.autoOpen === "true") {
         openGrowthGuideDialog();
@@ -99,6 +152,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     window.addEventListener("keydown", (event) => {
         if (event.key === "Escape") {
+            closeAuthDialog();
             closeAdoptionDialog();
             closeGrowthGuideDialog();
         }
