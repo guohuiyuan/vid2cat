@@ -1,7 +1,7 @@
 # vid2cat
 
 <p align="center">
-  <img src="./src/vid2cat/static/favicon.png" alt="vid2cat logo" width="260">
+  <img src="src/vid2cat/static/favicon.png" alt="vid2cat logo" width="260">
 </p>
 
 `vid2cat` 是一个基于 `FastAPI + Jinja2 + SQLite + Node.js + PicGo-Core` 的抖音驱动猫咪养成 Web 原型。
