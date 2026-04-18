@@ -100,7 +100,8 @@ def init_db() -> None:
                 password TEXT NOT NULL,
                 created_at TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'user',
-                must_change_password INTEGER NOT NULL DEFAULT 0
+                must_change_password INTEGER NOT NULL DEFAULT 0,
+                is_guest INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS atlases (
@@ -249,6 +250,7 @@ def init_db() -> None:
         )
         ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
         ensure_column(conn, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "users", "is_guest", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "atlases", "happiness_score", "INTEGER NOT NULL DEFAULT 70")
         ensure_column(conn, "atlases", "model1_output", "TEXT")
         ensure_column(conn, "atlases", "model2_output", "TEXT")
@@ -730,6 +732,76 @@ def register_user(username: str, email: str, password: str) -> tuple[bool, str]:
         return False, "用户名或邮箱已存在"
 
 
+def create_guest_user() -> dict[str, Any]:
+    now = utcnow()
+    while True:
+        suffix = secrets.token_hex(4)
+        username = f"游客{suffix}"
+        email = f"guest_{suffix}@guest.local"
+        password = hash_password(secrets.token_hex(16))
+        try:
+            with get_connection() as conn:
+                conn.execute(
+                    """
+                    INSERT INTO users (username, email, password, created_at, role, must_change_password, is_guest)
+                    VALUES (?, ?, ?, ?, 'user', 0, 1)
+                    """,
+                    (username, email, password, now),
+                )
+            break
+        except sqlite3.IntegrityError:
+            continue
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id, username, email, created_at, role, must_change_password, password, is_guest
+            FROM users
+            WHERE username = ?
+            LIMIT 1
+            """,
+            (username,),
+        ).fetchone()
+    return dict(row) if row else {}
+
+
+def transfer_guest_progress(guest_user_id: int, target_user_id: int) -> int:
+    if int(guest_user_id) == int(target_user_id):
+        return 0
+
+    guest_user = get_user_by_id(int(guest_user_id))
+    target_user = get_user_by_id(int(target_user_id))
+    if not guest_user or not target_user:
+        raise ValueError("用户不存在，无法接管游客进度")
+    if int(guest_user.get("is_guest") or 0) != 1:
+        raise ValueError("当前会话不是游客模式，无法接管游客进度")
+
+    guest_owned = count_user_owned_cats(int(guest_user_id))
+    target_owned = count_user_owned_cats(int(target_user_id))
+    if guest_owned + target_owned > 3:
+        raise ValueError("接管失败，登录账号当前拥有的猫太多，接管后会超过 3 只上限")
+
+    with get_connection() as conn:
+        total_transferred = conn.execute(
+            "SELECT COUNT(*) AS total FROM cats WHERE user_id = ?",
+            (int(guest_user_id),),
+        ).fetchone()
+        moved_count = int((total_transferred["total"] if total_transferred else 0) or 0)
+        if moved_count <= 0:
+            return 0
+
+        conn.execute(
+            "UPDATE cats SET is_active = 0, updated_at = ? WHERE user_id = ? AND available_for_adoption = 0",
+            (utcnow(), int(target_user_id)),
+        )
+        conn.execute(
+            "UPDATE cats SET user_id = ?, updated_at = ? WHERE user_id = ?",
+            (int(target_user_id), utcnow(), int(guest_user_id)),
+        )
+
+    get_or_activate_user_cat(int(target_user_id))
+    return moved_count
+
+
 def clamp_stat(value: int) -> int:
     return max(0, min(100, int(value)))
 
@@ -1208,7 +1280,7 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
 def list_recent_users(limit: int = 8) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
-            "SELECT id, username, email, created_at FROM users ORDER BY created_at DESC LIMIT ?",
+            "SELECT id, username, email, created_at FROM users WHERE is_guest = 0 ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
@@ -1218,7 +1290,7 @@ def get_user_by_id(user_id: int) -> dict[str, Any] | None:
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT id, username, email, created_at, role, must_change_password, password
+            SELECT id, username, email, created_at, role, must_change_password, password, is_guest
             FROM users
             WHERE id = ?
             """,
@@ -1232,9 +1304,9 @@ def authenticate_user(identity: str, password: str) -> dict[str, Any] | None:
     with get_connection() as conn:
         row = conn.execute(
             """
-            SELECT id, username, email, created_at, role, must_change_password, password
+            SELECT id, username, email, created_at, role, must_change_password, password, is_guest
             FROM users
-            WHERE (username = ? OR email = ?) AND role = 'user'
+            WHERE (username = ? OR email = ?) AND role = 'user' AND is_guest = 0
             LIMIT 1
             """,
             (cleaned, cleaned),

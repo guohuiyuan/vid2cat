@@ -249,6 +249,19 @@ h2 {
     gap: 14px;
 }
 
+.checkbox-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--text-main);
+    font-size: 14px;
+}
+
+.checkbox-row input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+}
+
 .input-group,
 .two-col-inputs,
 .action-row {

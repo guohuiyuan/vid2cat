@@ -30,6 +30,7 @@ from .db import (
     authenticate_admin,
     authenticate_user,
     count_user_owned_cats,
+    create_guest_user,
     create_initial_cat_for_user,
     get_atlas,
     get_cat_by_id,
@@ -54,6 +55,7 @@ from .db import (
     register_user,
     save_atlas,
     set_all_user_cats_inactive,
+    transfer_guest_progress,
     update_cat_final_persona,
     update_cat_public_status,
     update_settings,
@@ -419,9 +421,7 @@ async def run_feed_task(
 
 
 def submit_feed_for_current_user(request: Request, raw_input: str) -> RedirectResponse:
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login", error="请先登录后再给猫喂抖音链接", extra={"next": "/my-cat"})
+    current_user = get_or_create_session_user(request)
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
         return redirect_with_message("/my-cat", error="请先领养第一只猫，再开始喂养和对话。")
@@ -482,6 +482,18 @@ def get_current_user(request: Request) -> dict | None:
         request.session.pop("user_id", None)
         return None
     return user
+
+
+def get_or_create_session_user(request: Request) -> dict[str, Any]:
+    user = get_current_user(request)
+    if user:
+        return user
+    guest = create_guest_user()
+    if not guest:
+        raise HTTPException(status_code=500, detail="创建匿名用户失败")
+    request.session["user_id"] = int(guest["id"])
+    request.session["show_growth_guide"] = True
+    return guest
 
 
 def require_admin(request: Request, allow_password_change: bool = False) -> tuple[dict | None, RedirectResponse | None]:
@@ -556,14 +568,23 @@ def register_submit(
     email: str = Form(...),
     password: str = Form(...),
 ):
+    session_user = get_current_user(request)
     if not username.strip() or not email.strip() or not password.strip():
         return redirect_with_message("/register", error="请完整填写注册信息")
     ok, msg = register_user(username, email, password)
     if ok:
         user = authenticate_user(username, password)
+        transferred = 0
         if user:
+            if session_user and int(session_user.get("is_guest") or 0) == 1:
+                try:
+                    transferred = transfer_guest_progress(int(session_user["id"]), int(user["id"]))
+                except Exception as exc:
+                    return redirect_with_message("/register", error=str(exc))
             request.session["user_id"] = int(user["id"])
-            request.session["show_growth_guide"] = True
+            request.session["show_growth_guide"] = transferred <= 0
+        if transferred > 0:
+            return redirect_with_message("/my-cat", message="注册成功，已自动接管当前游客进度")
         return redirect_with_message("/my-cat", message="注册成功，请先领养你的第一只猫")
     return redirect_with_message("/register", error=msg)
 
@@ -595,17 +616,30 @@ def login_submit(
     identity: str = Form(...),
     password: str = Form(...),
     next: str = Form("/my-cat"),
+    takeover_guest: str = Form(default=""),
 ):
+    session_user = get_current_user(request)
     user = authenticate_user(identity, password)
     if not user:
         return redirect_with_message("/login", error="用户名/邮箱或密码错误", extra={"next": next})
+    transferred = 0
+    if takeover_guest and session_user and int(session_user.get("is_guest") or 0) == 1:
+        try:
+            transferred = transfer_guest_progress(int(session_user["id"]), int(user["id"]))
+        except Exception as exc:
+            return redirect_with_message("/login", error=str(exc), extra={"next": next})
     request.session["user_id"] = int(user["id"])
+    if transferred > 0:
+        return redirect_with_message(next or "/my-cat", message=f"欢迎回来，{user['username']}，已接管当前游客进度")
     return redirect_with_message(next or "/my-cat", message=f"欢迎回来，{user['username']}")
 
 
 @app.get("/logout")
 def logout(request: Request):
+    current_user = get_current_user(request)
     request.session.pop("user_id", None)
+    if current_user and int(current_user.get("is_guest") or 0) == 1:
+        return redirect_with_message("/", message="已退出游客模式")
     return redirect_with_message("/", message="已退出登录")
 
 
@@ -615,9 +649,7 @@ def my_cat_page(
     message: str = Query(default=""),
     error: str = Query(default=""),
 ):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login", error="请先登录后查看我的猫", extra={"next": "/my-cat"})
+    current_user = get_or_create_session_user(request)
     owned_count = count_user_owned_cats(int(current_user["id"]))
     cat = get_or_activate_user_cat(int(current_user["id"]))
     owned_cats = [build_cat_card(row) for row in list_user_cats(int(current_user["id"]), limit=3)]
@@ -691,9 +723,7 @@ def my_cat_page(
 
 @app.post("/my-cat/chat")
 async def my_cat_chat_submit(request: Request, content: str = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login")
+    current_user = get_or_create_session_user(request)
     settings = get_settings()
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
@@ -714,9 +744,7 @@ async def my_cat_chat_submit(request: Request, content: str = Form(...)):
 
 @app.post("/api/my-cat/chat/stream")
 async def my_cat_chat_stream(request: Request, content: str = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        raise HTTPException(status_code=401, detail="请先登录")
+    current_user = get_or_create_session_user(request)
     settings = get_settings()
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
@@ -748,9 +776,7 @@ async def my_cat_chat_stream(request: Request, content: str = Form(...)):
 
 @app.post("/api/my-cat/feed")
 async def my_cat_feed_async(request: Request, raw_input: str = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        raise HTTPException(status_code=401, detail="请先登录")
+    current_user = get_or_create_session_user(request)
     settings = get_settings()
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
@@ -769,9 +795,7 @@ async def my_cat_feed_async(request: Request, raw_input: str = Form(...)):
 
 @app.post("/my-cat/train")
 def my_cat_train(request: Request, action_key: str = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login", error="请先登录", extra={"next": "/my-cat"})
+    current_user = get_or_create_session_user(request)
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
         return redirect_with_message("/my-cat", error="请先领养第一只猫")
@@ -803,9 +827,7 @@ def task_status(task_id: str):
 
 @app.get("/api/my-cat/current")
 def current_cat_state(request: Request):
-    current_user = get_current_user(request)
-    if not current_user:
-        raise HTTPException(status_code=401, detail="请先登录")
+    current_user = get_or_create_session_user(request)
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
         raise HTTPException(status_code=404, detail="当前没有猫咪")
@@ -820,9 +842,7 @@ def my_cat_adopt_new(
     color: str = Form(...),
     image_url: str = Form(default=""),
 ):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login")
+    current_user = get_or_create_session_user(request)
     if not breed.strip() or not color.strip():
         return redirect_with_message("/my-cat", error="请先选择猫咪的品种和颜色")
     if count_user_owned_cats(int(current_user["id"])) >= 3:
@@ -846,9 +866,7 @@ def my_cat_adopt_new(
 
 @app.post("/my-cat/switch")
 def my_cat_switch(request: Request, cat_id: int = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login")
+    current_user = get_or_create_session_user(request)
     switched = activate_cat_for_user(int(current_user["id"]), cat_id)
     if not switched:
         return redirect_with_message("/my-cat", error="切换猫咪失败")
@@ -857,9 +875,7 @@ def my_cat_switch(request: Request, cat_id: int = Form(...)):
 
 @app.post("/my-cat/release")
 def my_cat_release(request: Request, cat_id: int = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login")
+    current_user = get_or_create_session_user(request)
     target = get_cat_by_id(cat_id)
     if not target or int(target.get("user_id") or 0) != int(current_user["id"]):
         return redirect_with_message("/my-cat", error="这只猫不属于你")
@@ -882,9 +898,7 @@ def my_cat_generate_final(request: Request):
 
 @app.post("/my-cat/publish")
 def my_cat_publish_toggle(request: Request, is_public: int = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login")
+    current_user = get_or_create_session_user(request)
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
         return redirect_with_message("/my-cat", error="请先领养第一只猫")
@@ -916,9 +930,7 @@ def cat_plaza_page(
 
 @app.post("/plaza/adopt")
 def plaza_adopt(request: Request, cat_id: int = Form(...)):
-    current_user = get_current_user(request)
-    if not current_user:
-        return redirect_with_message("/login", error="请先登录后再领养猫咪", extra={"next": "/plaza"})
+    current_user = get_or_create_session_user(request)
     try:
         adopted = adopt_plaza_cat(cat_id, int(current_user["id"]))
     except Exception as exc:

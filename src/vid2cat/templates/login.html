@@ -27,18 +27,25 @@
         <section class="content-card">
             <div class="section-title-row">
                 <h1>登录账号</h1>
-                <span class="section-hint">登录后进入“我的猫”，继续喂抖音链接养成</span>
+                <span class="section-hint">已有账号就登录继续养；如果只是想试试，也可以直接匿名开始</span>
             </div>
             <form class="stack-form" action="/login" method="post">
                 <input type="hidden" name="next" value="{{ next }}">
                 <input type="text" name="identity" placeholder="用户名或邮箱" required>
                 <input type="password" name="password" placeholder="密码" required>
+                {% if current_user and current_user.is_guest %}
+                <label class="checkbox-row">
+                    <input type="checkbox" name="takeover_guest" value="1" checked>
+                    <span>登录后接管当前游客进度</span>
+                </label>
+                {% endif %}
                 <button class="primary-btn full-width" type="submit">立即登录</button>
             </form>
             <div class="empty-state compact">
-                如果你的账号是旧账号，登录后系统也会自动补领一只初始猫。
+                不登录也能直接开始养猫；如果你现在正处于游客模式，登录后可以把当前猫和成长进度接管到正式账号。
             </div>
             <div class="form-footer-hint">
+                <a class="ghost-btn" href="/my-cat">直接匿名开始</a>
                 <span class="section-hint">还没有账号？</span>
                 <a class="ghost-btn" href="/register">去注册</a>
             </div>

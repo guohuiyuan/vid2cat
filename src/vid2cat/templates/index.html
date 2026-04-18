@@ -17,7 +17,7 @@
                 {% if current_user %}
                 <div class="user-dropdown">
                     <button class="user-dropdown-btn">
-                        {{ current_user.username }}
+                        {{ "游客模式" if current_user.is_guest else current_user.username }}
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                     </button>
                     <div class="user-dropdown-menu">
@@ -26,10 +26,14 @@
                         <a href="{{ item.href }}">{{ item.label }}</a>
                         {% endfor %}
                         {% else %}
+                        {% if current_user.is_guest %}
+                        <a href="/register">注册保存进度</a>
+                        <a href="/login">登录已有账号</a>
+                        {% endif %}
                         {% if admin_user %}
                         <a href="/admin">后台管理</a>
                         {% endif %}
-                        <a href="/logout">退出登录</a>
+                        <a href="/logout">{{ "退出游客模式" if current_user.is_guest else "退出登录" }}</a>
                         {% endif %}
                     </div>
                 </div>
@@ -61,8 +65,8 @@
                         {% if current_user %}
                         <a class="primary-btn anchor-btn" href="/my-cat">进入我的猫</a>
                         {% else %}
-                        <a class="primary-btn anchor-btn" href="/register">注册后领养</a>
-                        <a class="ghost-btn" href="/login">已有账号去登录</a>
+                        <a class="primary-btn anchor-btn" href="/my-cat">直接开始养猫</a>
+                        <a class="ghost-btn" href="/login">登录已有账号</a>
                         {% endif %}
                         <a class="ghost-btn" href="/plaza">浏览猫咪市场</a>
                     </div>
@@ -100,13 +104,13 @@
                 <div class="journey-grid">
                     <div class="journey-step">
                         <span class="pill muted">01</span>
-                        <strong>注册后完成首次领养</strong>
-                        <p>先选择猫咪的品种和颜色，如果没有图片，系统会自动生成初始形象和背景设定。</p>
+                        <strong>直接开始或注册保存</strong>
+                        <p>可以先用匿名身份开始领养；想保留长期进度时，再注册或登录自己的账号。</p>
                     </div>
                     <div class="journey-step">
                         <span class="pill muted">02</span>
                         <strong>先修炼经验</strong>
-                        <p>日常晒太阳、捕猎修炼、舔毛冥想、踩奶仪式、呼噜共鸣都会给猫增加经验。</p>
+                        <p>晒太阳和冥想都会给猫增加经验，先把经验条练满，再继续喂视频成长。</p>
                     </div>
                     <div class="journey-step">
                         <span class="pill muted">03</span>
@@ -146,7 +150,7 @@
                 </div>
                 {% else %}
                 <div class="empty-state compact">
-                    现在还没有你的猫，注册后进入“我的猫”页面即可完成第一次领养。
+                    现在还没有你的猫，直接进入“我的猫”页面就能用匿名身份完成第一次领养。
                 </div>
                 {% endif %}
             </aside>
