@@ -309,6 +309,34 @@ button, .primary-btn, .accent-btn, .ghost-btn, .anchor-btn {
     min-width: 96px;
 }
 
+.publish-toggle-btn {
+    min-width: 108px;
+    border-radius: 999px;
+    font-weight: 900;
+    letter-spacing: 0.4px;
+    padding: 6px 18px;
+    border: 2px solid transparent;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.publish-toggle-btn.published {
+    background: #8cdba8;
+    color: #1d5b34;
+    border-color: #65bf85;
+    box-shadow: 0 4px 0 #65bf85;
+}
+
+.publish-toggle-btn.hidden-state {
+    background: #ffe6c4;
+    color: #9c5d10;
+    border-color: #f4be7e;
+    box-shadow: 0 4px 0 #f4be7e;
+}
+
+.publish-toggle-btn:hover {
+    transform: translateY(1px);
+}
+
 /* 2. 主展示区布局 */
 .cat-stage-layout {
     display: grid;
@@ -760,6 +788,29 @@ select:focus, input:focus { border-color: var(--primary); }
     width: 100%;
     height: auto;
     border-radius: 18px;
+}
+
+.image-preview-meta {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 16px;
+    border: var(--border-thick);
+    background: #fffdf8;
+}
+
+.image-preview-meta h4 {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 900;
+    color: var(--text-main);
+}
+
+.image-preview-meta p {
+    margin: 8px 0 0;
+    line-height: 1.7;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 600;
 }
 
 .loading-dialog {

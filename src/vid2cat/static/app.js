@@ -20,6 +20,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const previewCardButtons = document.querySelectorAll("[data-preview-image]");
     const imagePreviewDialog = document.getElementById("image-preview-dialog");
     const imagePreviewTarget = document.getElementById("image-preview-target");
+    const imagePreviewTitle = document.getElementById("image-preview-title");
+    const imagePreviewDesc = document.getElementById("image-preview-desc");
     const previewCloseButtons = document.querySelectorAll("[data-close-preview]");
     const loadingOverlay = document.getElementById("loading-overlay");
     const loadingOverlayTitle = document.getElementById("loading-overlay-title");
@@ -150,9 +152,11 @@ document.addEventListener("DOMContentLoaded", () => {
         updateDialogBodyState();
     };
 
-    const openImagePreview = (url) => {
+    const openImagePreview = (url, title = "分享卡预览", desc = "预览图文字与技能区分开展示，不会出现重叠。") => {
         if (!imagePreviewDialog || !imagePreviewTarget || !url) return;
         imagePreviewTarget.src = url;
+        if (imagePreviewTitle) imagePreviewTitle.textContent = title;
+        if (imagePreviewDesc) imagePreviewDesc.textContent = desc;
         imagePreviewDialog.classList.remove("hidden");
         imagePreviewDialog.setAttribute("aria-hidden", "false");
         updateDialogBodyState();
@@ -163,6 +167,8 @@ document.addEventListener("DOMContentLoaded", () => {
         imagePreviewDialog.classList.add("hidden");
         imagePreviewDialog.setAttribute("aria-hidden", "true");
         imagePreviewTarget.src = "";
+        if (imagePreviewTitle) imagePreviewTitle.textContent = "分享卡预览";
+        if (imagePreviewDesc) imagePreviewDesc.textContent = "预览图文字与技能区分开展示，不会出现重叠。";
         updateDialogBodyState();
     };
 
@@ -194,10 +200,56 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", closeGrowthGuideDialog);
     });
 
-    previewCardButtons.forEach((button) => {
-        button.addEventListener("click", () => {
-            openImagePreview(button.dataset.previewImage);
+    const previewUploadedCard = async (button) => {
+        const catId = button.dataset.previewCatId || button.dataset.shareCardId;
+        const catName = button.dataset.previewCatName || button.dataset.shareCardName || "这只小猫";
+        if (!catId) {
+            openImagePreview(button.dataset.previewImage, `${catName} 的预览`, "未找到猫咪编号，展示本地预览。");
+            return;
+        }
+
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "准备预览中...";
+        try {
+            if (button.dataset.previewUploadedUrl) {
+                openImagePreview(
+                    button.dataset.previewUploadedUrl,
+                    `${catName} 的分享卡预览`,
+                    "该预览已走图床地址，介绍区单独展示，避免与技能文字重叠。",
+                );
+                return;
+            }
+
+            const response = await fetch(`/api/cats/${catId}/share-card/link`, { method: "POST" });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.detail || "生成预览图失败");
+            }
+            button.dataset.previewUploadedUrl = payload.uploaded_url || "";
+            openImagePreview(
+                payload.uploaded_url,
+                payload.share_title || `${catName} 的分享卡预览`,
+                payload.share_text || `这是 ${catName} 的图床预览图，介绍区已和技能展示分开。`,
+            );
+        } catch (error) {
+            appendEventMessage(error.message || "预览图生成失败", "error");
+        } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    };
+
+    const bindPreviewButton = (button) => {
+        if (!button || button.dataset.previewBound === "true") return;
+        button.dataset.previewBound = "true";
+        button.addEventListener("click", async () => {
+            await previewUploadedCard(button);
         });
+    };
+
+    previewCardButtons.forEach((button) => {
+        bindPreviewButton(button);
     });
 
     previewCloseButtons.forEach((button) => {
@@ -289,6 +341,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                     activeAdoptionTaskId = null;
                     if (task.status === "done") {
+                        if (!interactionForm) {
+                            window.location.href = "/my-cat?message=" + encodeURIComponent(task.message || "领养完成");
+                            return;
+                        }
                         await refreshCatPanel();
                         clearAdoptionLoadingSlots();
                         if (adoptionLoadingGrid) {
@@ -407,6 +463,14 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
+    const bindShareButton = (button) => {
+        if (!button || button.dataset.shareBound === "true") return;
+        button.dataset.shareBound = "true";
+        button.addEventListener("click", async () => {
+            await shareUploadedCard(button);
+        });
+    };
+
     const appendMessage = (role, content) => {
         if (!chatMessages) return null;
         const wrapper = document.createElement("div");
@@ -494,9 +558,41 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         ownedCats.forEach((owned) => {
-            const card = document.querySelector(`[data-owned-cat-id="${owned.id}"]`);
-            if (!card) {
-                return;
+            let card = document.querySelector(`[data-owned-cat-id="${owned.id}"]`);
+            if (!card && ownedCatsGrid) {
+                const activeTag = owned.is_active
+                    ? '<span class="pill active">当前陪伴中</span>'
+                    : `<form action="/my-cat/switch" method="POST"><input type="hidden" name="cat_id" value="${owned.id}"><button type="submit" class="ghost-btn">切换到这只</button></form>`;
+                const firstChar = (owned.cat_name || "猫").slice(0, 1);
+                const thumbContent = owned.image_url
+                    ? `<img class="owned-cat-image" src="${owned.image_url}" alt="${owned.cat_name || "猫咪"}">`
+                    : `<div class="cat-switch-placeholder owned-cat-placeholder">${firstChar}</div>`;
+                ownedCatsGrid.insertAdjacentHTML(
+                    "beforeend",
+                    `<article class="cat-switch-card${owned.is_active ? " active" : ""}" data-owned-cat-id="${owned.id}">
+                        <div class="cat-switch-thumb">${thumbContent}</div>
+                        <div class="cat-switch-body">
+                            <div class="cat-switch-top">
+                                <h3 class="owned-cat-name">${owned.cat_name || "未命名猫咪"}</h3>
+                                <span class="pill muted owned-cat-stage">${owned.stage || "初始态"}</span>
+                            </div>
+                            <div class="pill-row compact">
+                                <span class="pill muted owned-cat-level">Lv.${owned.level || 0}</span>
+                                <span class="pill muted owned-cat-feed">喂养 ${owned.feed_count || 0}/${owned.max_feed_count || 6}</span>
+                                <span class="pill muted owned-cat-power">总属性 ${owned.overall_power || 0}</span>
+                            </div>
+                        </div>
+                        <div class="cat-switch-actions">
+                            ${activeTag}
+                            <button type="button" class="ghost-btn" data-preview-image="/cats/${owned.id}/share-card.png" data-preview-cat-id="${owned.id}" data-preview-cat-name="${owned.cat_name || "猫咪"}" aria-label="预览 ${owned.cat_name || "猫咪"} 的分享卡">预览卡</button>
+                            <button type="button" class="ghost-btn share-card-btn" data-share-card-id="${owned.id}" data-share-card-name="${owned.cat_name || "这只小猫"}">分享卡</button>
+                        </div>
+                    </article>`,
+                );
+                card = document.querySelector(`[data-owned-cat-id="${owned.id}"]`);
+                if (!card) {
+                    return;
+                }
             }
 
             const thumb = card.querySelector(".cat-switch-thumb");
@@ -533,13 +629,17 @@ document.addEventListener("DOMContentLoaded", () => {
             const previewButton = card.querySelector("[data-preview-image]");
             if (previewButton) {
                 previewButton.dataset.previewImage = `/cats/${owned.id}/share-card.png`;
+                previewButton.dataset.previewCatId = String(owned.id);
+                previewButton.dataset.previewCatName = owned.cat_name || "猫咪";
                 previewButton.setAttribute("aria-label", `预览 ${owned.cat_name || "猫咪"} 的分享卡`);
+                bindPreviewButton(previewButton);
             }
 
             const shareButton = card.querySelector("[data-share-card-id]");
             if (shareButton) {
                 shareButton.dataset.shareCardId = String(owned.id);
                 shareButton.dataset.shareCardName = owned.cat_name || "这只小猫";
+                bindShareButton(shareButton);
             }
         });
     };
@@ -574,6 +674,11 @@ document.addEventListener("DOMContentLoaded", () => {
         setText("cat-level-value", `${cat.level}/6`);
         setText("cat-feed-count-value", `${cat.feed_count}/${cat.max_feed_count}`);
         setText("cat-overall-power", `${cat.overall_power}`);
+        setText("cat-stat-wisdom", `${cat.wisdom ?? 0}`);
+        setText("cat-stat-grit", `${cat.grit ?? 0}`);
+        setText("cat-stat-creativity", `${cat.creativity ?? 0}`);
+        setText("cat-stat-agility", `${cat.agility ?? 0}`);
+        setText("cat-stat-cooperation", `${cat.cooperation ?? 0}`);
         setText("cat-exp-text", cat.exp_progress.exp_to_next > 0 ? `${cat.exp_progress.exp}/${cat.exp_progress.exp_to_next}` : "已满级");
         setText("cat-feed-gate-hint", cat.feed_gate_hint);
         setText(
@@ -625,6 +730,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 interactionInput.dataset.feedLocked = "true";
             }
             interactionInput.dataset.feedLockedMessage = cat.feed_gate_hint || "当前暂时不能喂养。";
+        }
+
+        const publishInput = document.getElementById("publish-toggle-input");
+        const publishButton = document.getElementById("publish-toggle-button");
+        if (publishInput) {
+            publishInput.value = String(cat.is_public ? 0 : 1);
+        }
+        if (publishButton) {
+            publishButton.textContent = cat.is_public ? "隐藏" : "发布";
+            publishButton.classList.toggle("published", !!cat.is_public);
+            publishButton.classList.toggle("hidden-state", !cat.is_public);
         }
 
         refreshOwnedCards(cat.owned_cats);
@@ -939,9 +1055,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     shareCardButtons.forEach((button) => {
-        button.addEventListener("click", async () => {
-            await shareUploadedCard(button);
-        });
+        bindShareButton(button);
     });
 
     trainingButtons.forEach((button) => {

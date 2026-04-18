@@ -309,10 +309,12 @@ def build_current_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
     can_feed, feed_gate_hint = get_feed_gate_status(cat)
     return {
         "id": int(cat["id"]),
+        "cat_no": str(cat.get("cat_no") or ""),
         "name": str(cat.get("name") or "未命名猫咪"),
         "image_url": str(cat.get("image_url") or ""),
         "stage": str(cat.get("stage") or "初始态"),
         "level": int(cat.get("level") or 0),
+        "is_public": int(cat.get("is_public") or 0),
         "feed_count": int(cat.get("feed_count") or 0),
         "max_feed_count": int(cat.get("max_feed_count") or MAX_CAT_LEVEL),
         "remaining_feeds": max(
@@ -321,6 +323,11 @@ def build_current_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
             - int(cat.get("feed_count") or 0),
         ),
         "overall_power": int(cat.get("overall_power") or 0),
+        "wisdom": int(cat.get("wisdom") or 0),
+        "grit": int(cat.get("grit") or 0),
+        "creativity": int(cat.get("creativity") or 0),
+        "agility": int(cat.get("agility") or 0),
+        "cooperation": int(cat.get("cooperation") or 0),
         "personality": str(cat.get("personality") or ""),
         "story_summary": str(cat.get("story_summary") or ""),
         "latest_summary": str(cat.get("latest_summary") or ""),
@@ -1105,7 +1112,10 @@ def my_cat_train_api(request: Request, action_key: str = Form(...)):
         else f"{action['label']}完成，获得 {result['exp_gain']} 点经验，还差 {remaining} 点经验才能喂视频"
     )
     return JSONResponse(
-        {"message": message, "cat": build_current_cat_payload(updated_cat)}
+        {
+            "message": message,
+            "cat": build_cat_sync_payload(int(current_user["id"]), updated_cat),
+        }
     )
 
 

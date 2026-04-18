@@ -59,6 +59,8 @@
                             type="button"
                             class="ghost-btn"
                             data-preview-image="/cats/{{ owned.id }}/share-card.png"
+                            data-preview-cat-id="{{ owned.id }}"
+                            data-preview-cat-name="{{ owned.cat_name }}"
                             aria-label="预览 {{ owned.cat_name }} 的分享卡"
                         >
                             预览卡
@@ -104,10 +106,10 @@
                         <span id="cat-stage-pill" class="pill muted">阶段：{{ cat.stage }}</span>
                         <span id="cat-remaining-feed-pill" class="pill muted">剩余喂养 {{ remaining_feeds }} 次</span>
                         {% if cat.image_url %}
-                        <form action="/my-cat/publish" method="POST">
-                            <input type="hidden" name="is_public" value="{{ 0 if cat.is_public else 1 }}">
-                            <button type="submit" class="pill{% if cat.is_public %} active{% endif %}">
-                                {{ "已发布到市场" if cat.is_public else "仅自己可见" }}
+                        <form id="publish-toggle-form" action="/my-cat/publish" method="POST">
+                            <input id="publish-toggle-input" type="hidden" name="is_public" value="{{ 0 if cat.is_public else 1 }}">
+                            <button id="publish-toggle-button" type="submit" class="publish-toggle-btn{% if cat.is_public %} published{% else %} hidden-state{% endif %}">
+                                {{ "隐藏" if cat.is_public else "发布" }}
                             </button>
                         </form>
                         {% endif %}
@@ -154,7 +156,7 @@
                                     {% for item in stat_cards %}
                                     <div class="profile-item">
                                         <span>{{ item.label }}</span>
-                                        <strong>{{ item.value }}</strong>
+                                        <strong id="cat-stat-{{ item.key }}">{{ item.value }}</strong>
                                     </div>
                                     {% endfor %}
                                 </div>
@@ -412,6 +414,10 @@
             </div>
             <div class="image-preview-body">
                 <img id="image-preview-target" src="" alt="猫咪分享卡预览图">
+            </div>
+            <div class="image-preview-meta">
+                <h4 id="image-preview-title">分享卡预览</h4>
+                <p id="image-preview-desc">预览图文字与技能区分开展示，不会出现重叠。</p>
             </div>
         </div>
     </div>
