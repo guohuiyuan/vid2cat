@@ -17,6 +17,15 @@ document.addEventListener("DOMContentLoaded", () => {
     const authCloseButtons = document.querySelectorAll("[data-close-auth]");
     const authTabButtons = document.querySelectorAll("[data-auth-tab]");
     const authPanels = document.querySelectorAll("[data-auth-panel]");
+    const previewCardButtons = document.querySelectorAll("[data-preview-image]");
+    const imagePreviewDialog = document.getElementById("image-preview-dialog");
+    const imagePreviewTarget = document.getElementById("image-preview-target");
+    const previewCloseButtons = document.querySelectorAll("[data-close-preview]");
+    const loadingOverlay = document.getElementById("loading-overlay");
+    const loadingOverlayTitle = document.getElementById("loading-overlay-title");
+    const loadingOverlayText = document.getElementById("loading-overlay-text");
+    const adoptionForm = document.querySelector("[data-adoption-form]");
+    const trainingButtons = document.querySelectorAll(".training-action-btn");
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
 
     let activeTaskId = null;
@@ -45,10 +54,26 @@ document.addEventListener("DOMContentLoaded", () => {
     scrollChatToBottom();
 
     const updateDialogBodyState = () => {
-        const hasVisibleDialog = [authDialog, adoptionDialog, growthGuideDialog].some(
+        const hasVisibleDialog = [authDialog, adoptionDialog, growthGuideDialog, imagePreviewDialog, loadingOverlay].some(
             (dialog) => dialog && !dialog.classList.contains("hidden"),
         );
         document.body.classList.toggle("dialog-open", hasVisibleDialog);
+    };
+
+    const showLoadingOverlay = (title, text) => {
+        if (!loadingOverlay) return;
+        if (loadingOverlayTitle) loadingOverlayTitle.textContent = title || "处理中...";
+        if (loadingOverlayText) loadingOverlayText.textContent = text || "请稍等，正在准备你的猫咪。";
+        loadingOverlay.classList.remove("hidden");
+        loadingOverlay.setAttribute("aria-hidden", "false");
+        updateDialogBodyState();
+    };
+
+    const hideLoadingOverlay = () => {
+        if (!loadingOverlay) return;
+        loadingOverlay.classList.add("hidden");
+        loadingOverlay.setAttribute("aria-hidden", "true");
+        updateDialogBodyState();
     };
 
     const setAuthTab = (tabName) => {
@@ -114,6 +139,22 @@ document.addEventListener("DOMContentLoaded", () => {
         updateDialogBodyState();
     };
 
+    const openImagePreview = (url) => {
+        if (!imagePreviewDialog || !imagePreviewTarget || !url) return;
+        imagePreviewTarget.src = url;
+        imagePreviewDialog.classList.remove("hidden");
+        imagePreviewDialog.setAttribute("aria-hidden", "false");
+        updateDialogBodyState();
+    };
+
+    const closeImagePreview = () => {
+        if (!imagePreviewDialog || !imagePreviewTarget) return;
+        imagePreviewDialog.classList.add("hidden");
+        imagePreviewDialog.setAttribute("aria-hidden", "true");
+        imagePreviewTarget.src = "";
+        updateDialogBodyState();
+    };
+
     authOpenButtons.forEach((button) => {
         button.addEventListener("click", () => {
             openAuthDialog(button.dataset.openAuth || "login");
@@ -142,6 +183,22 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", closeGrowthGuideDialog);
     });
 
+    previewCardButtons.forEach((button) => {
+        button.addEventListener("click", () => {
+            openImagePreview(button.dataset.previewImage);
+        });
+    });
+
+    previewCloseButtons.forEach((button) => {
+        button.addEventListener("click", closeImagePreview);
+    });
+
+    if (adoptionForm) {
+        adoptionForm.addEventListener("submit", () => {
+            showLoadingOverlay("正在领养中...", "正在为你生成新的猫咪形象，请稍等一下。");
+        });
+    }
+
     if (authDialog?.dataset.autoOpen === "true") {
         openAuthDialog(authDialog.dataset.initialAuthTab || "login");
     } else if (adoptionDialog?.dataset.autoOpen === "true") {
@@ -155,6 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
             closeAuthDialog();
             closeAdoptionDialog();
             closeGrowthGuideDialog();
+            closeImagePreview();
         }
     });
 
@@ -396,6 +454,38 @@ document.addEventListener("DOMContentLoaded", () => {
             interactionInput.dataset.feedLockedMessage = cat.feed_gate_hint || "当前暂时不能喂养。";
         }
         updateInteractionUi();
+    };
+
+    const submitTraining = async (actionKey, triggerButton) => {
+        if (!actionKey) return;
+        const originalText = triggerButton.textContent;
+        trainingButtons.forEach((button) => {
+            button.disabled = true;
+        });
+        triggerButton.textContent = "进行中...";
+        try {
+            const formData = new FormData();
+            formData.append("action_key", actionKey);
+            const response = await fetch("/api/my-cat/train", {
+                method: "POST",
+                body: formData,
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.detail || "修炼失败");
+            }
+            await refreshCatPanel();
+            appendEventMessage(payload.message || "修炼完成", "done");
+            setTaskStatus(payload.message || "修炼完成", "done");
+        } catch (error) {
+            appendEventMessage(error.message || "修炼失败", "error");
+            setTaskStatus(error.message || "修炼失败", "error");
+        } finally {
+            trainingButtons.forEach((button) => {
+                button.disabled = false;
+            });
+            triggerButton.textContent = originalText;
+        }
     };
 
     const containsDouyinUrl = (text) => douyinPattern.test(text || "");
@@ -674,4 +764,9 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
-});
+    trainingButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            await submitTraining(button.dataset.actionKey, button);
+        });
+    });
+

@@ -714,9 +714,9 @@ def my_cat_page(
     training_actions = build_training_cards()
     can_feed, feed_gate_hint = get_feed_gate_status(cat)
     show_growth_guide = bool(request.session.get("show_growth_guide")) and (
-        owned_count == 0 or (cat is not None and owned_count == 1 and int(cat.get("feed_count") or 0) == 0)
+        cat is not None and owned_count == 1 and int(cat.get("feed_count") or 0) == 0
     )
-    if cat and int(cat.get("feed_count") or 0) > 0:
+    if show_growth_guide or (cat and int(cat.get("feed_count") or 0) > 0):
         request.session.pop("show_growth_guide", None)
 
     return templates.TemplateResponse(
@@ -856,6 +856,27 @@ def my_cat_train(request: Request, action_key: str = Form(...)):
         "/my-cat",
         message=f"{action['label']}完成，获得 {result['exp_gain']} 点经验，还差 {remaining} 点经验才能喂视频",
     )
+
+
+@app.post("/api/my-cat/train")
+def my_cat_train_api(request: Request, action_key: str = Form(...)):
+    current_user = get_or_create_session_user(request)
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        raise HTTPException(status_code=400, detail="请先领养第一只猫")
+    try:
+        result = perform_daily_training(int(cat["id"]), action_key)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    action = result["action"]
+    updated_cat = result["cat"]
+    remaining = max(0, int(updated_cat.get("exp_to_next") or 0) - int(updated_cat.get("exp") or 0))
+    message = (
+        f"{action['label']}完成，经验条已满，现在可以喂视频让 {updated_cat['name']} 升级了"
+        if result["exp_full"]
+        else f"{action['label']}完成，获得 {result['exp_gain']} 点经验，还差 {remaining} 点经验才能喂视频"
+    )
+    return JSONResponse({"message": message, "cat": build_current_cat_payload(updated_cat)})
 
 
 @app.get("/api/tasks/{task_id}")
