@@ -7,6 +7,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const chatMessages = document.getElementById("chatMessages");
     const starRatings = document.querySelectorAll("[data-star-rating]");
     const shareCardButtons = document.querySelectorAll("[data-share-card-id]");
+    const adoptionDialog = document.getElementById("adoption-dialog");
+    const adoptionOpenButtons = document.querySelectorAll("[data-open-adoption]");
+    const adoptionCloseButtons = document.querySelectorAll("[data-close-adoption]");
+    const growthGuideDialog = document.getElementById("growth-guide-dialog");
+    const growthGuideCloseButtons = document.querySelectorAll("[data-close-growth-guide]");
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
 
     let activeTaskId = null;
@@ -33,6 +38,71 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     scrollChatToBottom();
+
+    const openAdoptionDialog = () => {
+        if (!adoptionDialog) return;
+        if (growthGuideDialog) {
+            growthGuideDialog.classList.add("hidden");
+            growthGuideDialog.setAttribute("aria-hidden", "true");
+        }
+        adoptionDialog.classList.remove("hidden");
+        adoptionDialog.setAttribute("aria-hidden", "false");
+        document.body.classList.add("dialog-open");
+    };
+
+    const closeAdoptionDialog = () => {
+        if (!adoptionDialog) return;
+        adoptionDialog.classList.add("hidden");
+        adoptionDialog.setAttribute("aria-hidden", "true");
+        if (growthGuideDialog?.classList.contains("hidden")) {
+            document.body.classList.remove("dialog-open");
+        }
+    };
+
+    const openGrowthGuideDialog = () => {
+        if (!growthGuideDialog) return;
+        if (adoptionDialog) {
+            adoptionDialog.classList.add("hidden");
+            adoptionDialog.setAttribute("aria-hidden", "true");
+        }
+        growthGuideDialog.classList.remove("hidden");
+        growthGuideDialog.setAttribute("aria-hidden", "false");
+        document.body.classList.add("dialog-open");
+    };
+
+    const closeGrowthGuideDialog = () => {
+        if (!growthGuideDialog) return;
+        growthGuideDialog.classList.add("hidden");
+        growthGuideDialog.setAttribute("aria-hidden", "true");
+        if (adoptionDialog?.classList.contains("hidden")) {
+            document.body.classList.remove("dialog-open");
+        }
+    };
+
+    adoptionOpenButtons.forEach((button) => {
+        button.addEventListener("click", openAdoptionDialog);
+    });
+
+    adoptionCloseButtons.forEach((button) => {
+        button.addEventListener("click", closeAdoptionDialog);
+    });
+
+    growthGuideCloseButtons.forEach((button) => {
+        button.addEventListener("click", closeGrowthGuideDialog);
+    });
+
+    if (adoptionDialog?.dataset.autoOpen === "true") {
+        openAdoptionDialog();
+    } else if (growthGuideDialog?.dataset.autoOpen === "true") {
+        openGrowthGuideDialog();
+    }
+
+    window.addEventListener("keydown", (event) => {
+        if (event.key === "Escape") {
+            closeAdoptionDialog();
+            closeGrowthGuideDialog();
+        }
+    });
 
     const showShareNotice = (text) => {
         window.alert(text);
