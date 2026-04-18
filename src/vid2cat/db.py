@@ -1549,6 +1549,22 @@ def adopt_plaza_cat(cat_id: int, new_user_id: int) -> dict[str, Any] | None:
     return get_cat_by_id(cat_id)
 
 
+def admin_delete_cat(cat_id: int) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM cats WHERE id = ? LIMIT 1",
+            (cat_id,),
+        ).fetchone()
+        if not row:
+            return False
+
+        conn.execute("DELETE FROM cat_messages WHERE cat_id = ?", (cat_id,))
+        conn.execute("DELETE FROM cat_training_records WHERE cat_id = ?", (cat_id,))
+        conn.execute("DELETE FROM cat_feed_records WHERE cat_id = ?", (cat_id,))
+        conn.execute("DELETE FROM cats WHERE id = ?", (cat_id,))
+    return True
+
+
 def add_cat_message(cat_id: int, role: str, content: str) -> None:
     with get_connection() as conn:
         conn.execute(

@@ -28,6 +28,7 @@ from .db import (
     DEFAULT_SETTINGS,
     MAX_CAT_LEVEL,
     add_comment,
+    admin_delete_cat,
     adopt_plaza_cat,
     add_cat_feed_record,
     add_cat_message,
@@ -1582,6 +1583,7 @@ def admin_dashboard(
     if redirect:
         return redirect
     settings = get_settings()
+    market_cats = [build_cat_card(row) for row in list_public_cats(limit=200)]
     return templates.TemplateResponse(
         request=request,
         name="admin_dashboard.html",
@@ -1599,7 +1601,8 @@ def admin_dashboard(
             "settings": settings,
             "uploaded_url": uploaded_url,
             "image_host_status": ImageHostScaffold.describe(settings),
-            "recent_users": list_recent_users(limit=12),
+            "market_cats": market_cats,
+            "market_cats_count": len(market_cats),
         },
     )
 
@@ -1644,6 +1647,17 @@ async def admin_upload_test(request: Request, image: UploadFile = File(...)):
     finally:
         if temp_path.exists():
             temp_path.unlink(missing_ok=True)
+
+
+@app.post("/admin/cats/delete")
+def admin_delete_cat_submit(request: Request, cat_id: int = Form(...)):
+    admin, redirect = require_admin(request)
+    if redirect:
+        return redirect
+    deleted = admin_delete_cat(cat_id)
+    if not deleted:
+        return redirect_with_message("/admin", error="猫咪不存在或已被删除")
+    return redirect_with_message("/admin", message=f"已删除猫咪 #{cat_id}")
 
 
 def main() -> None:

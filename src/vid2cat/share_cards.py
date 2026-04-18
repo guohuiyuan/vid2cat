@@ -61,7 +61,6 @@ def render_cat_share_card(
         f"喂养 {int(cat.get('feed_count') or 0)}/{int(cat.get('max_feed_count') or 6)}",
     ]
     _draw_tag_row(draw, meta_items, (118, 980), body_font)
-    _draw_skill_badges(draw, cat.get("learned_skills") or [], (118, 1096), body_font)
 
     owner_display = str(owner_name or cat.get("highest_level_owner_name") or "匿名主人")
     draw.text((118, 1048), f"当前主人 @{owner_display}", fill="#7c5a45", font=body_font)
@@ -72,11 +71,6 @@ def render_cat_share_card(
     draw.text((84, 1168), "猫咪档案", fill="#4f2b15", font=section_font)
     summary = str(cat.get("story_summary") or cat.get("personality") or "这只小猫正在等待新的成长故事。").strip()
     _draw_wrapped_text(draw, summary, (84, 1212), 590, body_font, "#6f4d38", line_spacing=14)
-
-    skills = cat.get("learned_skills") or []
-    skill_text = "、".join(skill.get("name", "") for skill in skills[:4] if skill.get("name")) or "暂未学会技能"
-    draw.text((84, 1364), f"技能：{skill_text}", fill="#875d40", font=small_font)
-    draw.text((84, 1410), f"扫码进入 {site_url}", fill="#875d40", font=small_font)
 
     output = BytesIO()
     canvas.save(output, format="PNG")
@@ -164,7 +158,6 @@ def _draw_qr_block(
     qr_image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
     qr_image = qr_image.resize((right - left, bottom - top), Image.Resampling.NEAREST)
     canvas.paste(qr_image, (left, top))
-    draw.text((left + 18, bottom + 22), "扫码进入网站", fill="#6d4f38", font=label_font)
 
 
 def _draw_rarity_badge(draw: ImageDraw.ImageDraw, rarity: str, font: ImageFont.ImageFont) -> None:

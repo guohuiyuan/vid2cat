@@ -11,67 +11,37 @@
         <div class="notice error">{{ error }}</div>
         {% endif %}
 
-        <section class="hero-card admin-hero">
-            <div>
-                <p class="eyebrow">管理员控制台</p>
-                <h1>统一维护 AI 配置与图床配置</h1>
-                <p class="hero-copy">
-                    当前管理员为 {{ admin.username }}。这里可以配置三个 AI 模型的 `apiurl / apikey / model`，
-                    同时维护 PicGo-Core 对接 Gitee 图床所需的仓库、分支、路径与 Token。
-                </p>
-            </div>
-            <div class="feature-panel">
-                <div class="feature-item">
-                    <span class="feature-label">图床状态</span>
-                    <strong>{{ image_host_status }}</strong>
-                </div>
-                <div class="feature-item">
-                    <span class="feature-label">Node.js 依赖</span>
-                    <strong>项目根目录已接入 PicGo-Core 上传脚本</strong>
-                </div>
-            </div>
-        </section>
-
         <section class="dashboard-grid admin-grid">
             <div class="content-card">
                 <div class="section-title-row">
-                    <h2>三套 AI 配置</h2>
-                    <span class="section-hint">每套配置对应一条明确链路，模型 1 已接入实际解析流程</span>
+                    <h2>后台配置</h2>
                 </div>
                 <form class="stack-form" action="/admin/settings" method="post">
                     <div class="section-title-row">
                         <h2>站点与分享配置</h2>
-                        <span class="section-hint">分享卡二维码默认指向当前站点首页，可按部署域名调整</span>
                     </div>
                     <div class="admin-form-grid">
                         <div class="info-panel">
                             <h3>公开站点地址</h3>
                             <input type="text" name="public_site_url" placeholder="https://vid2cat.zeabur.app/" value="{{ settings.public_site_url }}">
-                            <p>用于分享卡二维码和文案中的访问地址，默认指向 Zeabur 线上站点。</p>
                         </div>
                     </div>
 
                     <div class="admin-form-grid">
                         <div class="info-panel">
                             <h3>模型 1</h3>
-                            <p>用途：抖音视频解析成功后，立即生成图鉴页里的 AI 摘要、优化建议和更精炼标签。</p>
-                            <p>当前生效点：用户提交抖音链接后，第一条视频解析链路优先调用这里的模型。</p>
                             <input type="text" name="ai_model_1_api_url" placeholder="API URL" value="{{ settings.ai_model_1_api_url }}">
                             <input type="text" name="ai_model_1_api_key" placeholder="API Key" value="{{ settings.ai_model_1_api_key }}">
                             <input type="text" name="ai_model_1_model" placeholder="Model" value="{{ settings.ai_model_1_model }}">
                         </div>
                         <div class="info-panel">
                             <h3>模型 2</h3>
-                            <p>用途：根据模型 1 的视频总结，生成人设层内容，例如猫咪品种、技能、性格、背景故事。</p>
-                            <p>当前状态：配置已保存，后续接入到“猫咪人设强化生成”流程。</p>
                             <input type="text" name="ai_model_2_api_url" placeholder="API URL" value="{{ settings.ai_model_2_api_url }}">
                             <input type="text" name="ai_model_2_api_key" placeholder="API Key" value="{{ settings.ai_model_2_api_key }}">
                             <input type="text" name="ai_model_2_model" placeholder="Model" value="{{ settings.ai_model_2_model }}">
                         </div>
                         <div class="info-panel">
                             <h3>模型 3</h3>
-                            <p>用途：根据模型 2 生成的人设和提示词，输出绘图结果或图鉴分享图。</p>
-                            <p>当前状态：配置已保存，后续接入到“图鉴绘图/分享卡生成”流程。</p>
                             <input type="text" name="ai_model_3_api_url" placeholder="API URL" value="{{ settings.ai_model_3_api_url }}">
                             <input type="text" name="ai_model_3_api_key" placeholder="API Key" value="{{ settings.ai_model_3_api_key }}">
                             <input type="text" name="ai_model_3_model" placeholder="Model" value="{{ settings.ai_model_3_model }}">
@@ -80,7 +50,6 @@
 
                     <div class="section-title-row section-gap">
                         <h2>图床与图传配置</h2>
-                        <span class="section-hint">参考 pic-store，真实接入 PicGo-Core + Gitee</span>
                     </div>
 
                     <div class="admin-form-grid">
@@ -95,7 +64,6 @@
                         <div class="info-panel">
                             <h3>后端图传补充</h3>
                             <input type="text" name="extra_upload_token" placeholder="其他图传 Token" value="{{ settings.extra_upload_token }}">
-                            <p>该 Token 可留给后续其他上传服务或中转接口使用。</p>
                         </div>
                     </div>
 
@@ -108,8 +76,8 @@
             <aside class="content-card side-card">
                 <div class="section-title-row">
                     <h2>图床测试</h2>
-                    <span class="section-hint">直接调用 Node.js 上传脚本</span>
                 </div>
+                <p class="section-hint">{{ image_host_status }}</p>
                 <form class="stack-form" action="/admin/upload-test" method="post" enctype="multipart/form-data">
                     <input type="file" name="image" accept="image/*" required>
                     <button class="accent-btn full-width" type="submit">上传测试图片</button>
@@ -125,28 +93,42 @@
             </aside>
         </section>
 
-        <section class="dashboard-grid admin-grid">
-            <aside class="content-card side-card">
+        <section class="content-card">
                 <div class="section-title-row">
-                    <h2>最近注册</h2>
-                    <span class="section-hint">用户注册信息仅在管理员后台展示</span>
+                    <h2>猫咪市场管理</h2>
+                    <span class="section-hint">当前市场猫咪：{{ market_cats_count }} 只</span>
                 </div>
-                {% if recent_users %}
-                <div class="user-list">
-                    {% for user in recent_users %}
-                    <div class="user-item">
-                        <div>
-                            <strong>{{ user.username }}</strong>
-                            <p>{{ user.email }}</p>
+                {% if market_cats %}
+                <div class="market-grid">
+                    {% for card in market_cats %}
+                    <article class="market-card">
+                        <div class="market-card-cover">
+                            {% if card.image_url %}
+                            <img src="{{ card.image_url }}" alt="{{ card.cat_name }}">
+                            {% endif %}
                         </div>
-                        <span>{{ user.created_at[:10] }}</span>
-                    </div>
+                        <div class="market-card-body">
+                            <div class="market-card-header">
+                                <div>
+                                    <h3>{{ card.cat_name }}</h3>
+                                    <p class="market-owner">@{{ card.username }}</p>
+                                </div>
+                                <span class="pill muted">Lv.{{ card.level }}</span>
+                            </div>
+                            <p class="card-summary">{{ card.summary }}</p>
+                            <form class="action-row" action="/admin/cats/delete" method="post">
+                                <input type="hidden" name="cat_id" value="{{ card.id }}">
+                                <button class="danger-btn full-width" type="submit" onclick="return confirm('确认删除这只猫？该操作不可恢复。');">
+                                    删除猫咪
+                                </button>
+                            </form>
+                        </div>
+                    </article>
                     {% endfor %}
                 </div>
                 {% else %}
-                <div class="empty-state compact">暂无注册用户。</div>
+                <div class="empty-state compact">当前市场暂无可管理的猫咪。</div>
                 {% endif %}
-            </aside>
         </section>
     </div>
 {% endblock %}

@@ -63,7 +63,16 @@
                 <div class="inline-warning">登录后才能领养市场中的猫咪。</div>
                 {% endif %}
                 <div class="action-row">
-                    <a class="ghost-btn full-width anchor-btn" href="/cats/{{ card.id }}/share-card.png" target="_blank" rel="noopener noreferrer">预览卡</a>
+                    <button
+                        type="button"
+                        class="ghost-btn full-width anchor-btn"
+                        data-preview-image="/cats/{{ card.id }}/share-card.png"
+                        data-preview-cat-id="{{ card.id }}"
+                        data-preview-cat-name="{{ card.cat_name }}"
+                        aria-label="预览 {{ card.cat_name }} 的分享卡"
+                    >
+                        预览卡
+                    </button>
                     <button type="button" class="ghost-btn full-width anchor-btn share-card-btn" data-share-card-id="{{ card.id }}" data-share-card-name="{{ card.cat_name }}">分享卡</button>
                 </div>
             </div>
@@ -76,5 +85,25 @@
         <a href="/my-cat" class="primary-btn anchor-btn">去我的猫</a>
     </div>
     {% endif %}
+
+    <div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="分享卡预览">
+        <div class="dialog-backdrop" data-close-preview></div>
+        <div class="unified-dialog-card image-preview-dialog">
+            <div class="dialog-header">
+                <div>
+                    <h3>分享卡预览</h3>
+                    <span class="section-hint">已走图床地址，浮动预览</span>
+                </div>
+                <button type="button" class="ghost-btn dialog-close-btn" data-close-preview aria-label="关闭预览">&times;</button>
+            </div>
+            <div class="image-preview-body">
+                <img id="image-preview-target" src="" alt="猫咪分享卡预览图">
+            </div>
+            <div class="image-preview-meta">
+                <h4 id="image-preview-title">分享卡预览</h4>
+                <p id="image-preview-desc">预览简介展示在下方，不叠加技能文本。</p>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
