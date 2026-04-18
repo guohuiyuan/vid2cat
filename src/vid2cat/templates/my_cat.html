@@ -27,23 +27,23 @@
             {% if owned_cats %}
             <div id="owned-cats-grid" class="cat-switcher-grid">
                 {% for owned in owned_cats %}
-                <article class="cat-switch-card{% if owned.is_active %} active{% endif %}">
+                <article class="cat-switch-card{% if owned.is_active %} active{% endif %}" data-owned-cat-id="{{ owned.id }}">
                     <div class="cat-switch-thumb">
                         {% if owned.image_url %}
-                        <img src="{{ owned.image_url }}" alt="{{ owned.cat_name }}">
+                        <img class="owned-cat-image" src="{{ owned.image_url }}" alt="{{ owned.cat_name }}">
                         {% else %}
-                        <div class="cat-switch-placeholder">{{ owned.cat_name[:1] }}</div>
+                        <div class="cat-switch-placeholder owned-cat-placeholder">{{ owned.cat_name[:1] }}</div>
                         {% endif %}
                     </div>
                     <div class="cat-switch-body">
                         <div class="cat-switch-top">
-                            <h3>{{ owned.cat_name }}</h3>
-                            <span class="pill muted">{{ owned.stage }}</span>
+                            <h3 class="owned-cat-name">{{ owned.cat_name }}</h3>
+                            <span class="pill muted owned-cat-stage">{{ owned.stage }}</span>
                         </div>
                         <div class="pill-row compact">
-                            <span class="pill muted">Lv.{{ owned.level }}</span>
-                            <span class="pill muted">喂养 {{ owned.feed_count }}/{{ owned.max_feed_count }}</span>
-                            <span class="pill muted">总属性 {{ owned.overall_power }}</span>
+                            <span class="pill muted owned-cat-level">Lv.{{ owned.level }}</span>
+                            <span class="pill muted owned-cat-feed">喂养 {{ owned.feed_count }}/{{ owned.max_feed_count }}</span>
+                            <span class="pill muted owned-cat-power">总属性 {{ owned.overall_power }}</span>
                         </div>
                     </div>
                     <div class="cat-switch-actions">
@@ -362,28 +362,43 @@
         </section>
     </div>
     {% endif %}
-    {% if show_growth_guide %}
-    <section class="content-card">
-        <div class="section-title-row">
-            <h2>成长说明</h2>
-            <span class="section-hint">只在新用户阶段展示一次核心规则</span>
-        </div>
-        <div class="moment-list onboarding-moment-list">
-            <div class="moment-item">
-                <strong>1. 先领养</strong>
-                <p>第一次领养要先选颜色和品种，系统会根据预设提示词自动生成形象。</p>
+    <div
+        id="growth-guide-dialog"
+        class="dialog-overlay {% if not show_growth_guide %}hidden{% endif %}"
+        aria-hidden="{{ 'false' if show_growth_guide else 'true' }}"
+        role="dialog"
+        aria-modal="true"
+        aria-label="成长说明"
+        data-auto-open="{{ 'true' if show_growth_guide else 'false' }}"
+    >
+        <div class="dialog-backdrop" data-close-growth-guide></div>
+        <section class="content-card guide-dialog">
+            <div class="dialog-header">
+                <div>
+                    <h2>成长说明</h2>
+                    <span class="section-hint">该说明仅首次展示一次</span>
+                </div>
+                <button type="button" class="ghost-btn dialog-close-btn" data-close-growth-guide aria-label="关闭成长说明">&times;</button>
             </div>
-            <div class="moment-item">
-                <strong>2. 先修炼再喂养</strong>
-                <p>晒太阳和冥想都能涨经验，经验条满了才能喂视频升级。</p>
+            <div class="moment-list onboarding-moment-list">
+                <div class="moment-item">
+                    <strong>1. 先领养</strong>
+                    <p>第一次领养要先选颜色和品种，系统会根据预设提示词自动生成形象。</p>
+                </div>
+                <div class="moment-item">
+                    <strong>2. 先修炼再喂养</strong>
+                    <p>晒太阳和冥想都能涨经验，经验条满了才能喂视频升级。</p>
+                </div>
+                <div class="moment-item">
+                    <strong>3. 最多 6 次突破</strong>
+                    <p>猫咪从 0 级升到 6 级，最多喂 6 个视频；每喂一个视频都会升级、学会一个技能，并刷新形象。</p>
+                </div>
             </div>
-            <div class="moment-item">
-                <strong>3. 最多 6 次突破</strong>
-                <p>猫咪从 0 级升到 6 级，最多喂 6 个视频；每喂一个视频都会升级、学会一个技能，并刷新形象。</p>
+            <div class="dialog-actions action-row">
+                <button type="button" class="primary-btn" data-close-growth-guide>我知道了</button>
             </div>
-        </div>
-    </section>
-    {% endif %}
+        </section>
+    </div>
 
     <div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="分享卡预览">
         <div class="dialog-backdrop" data-close-preview></div>

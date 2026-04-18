@@ -333,6 +333,27 @@ def build_current_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def build_cat_sync_payload(user_id: int, cat: dict[str, Any]) -> dict[str, Any]:
+    payload = build_current_cat_payload(cat)
+    owned_cards = [build_cat_card(row) for row in list_user_cats(user_id, limit=3)]
+    feed_events = list_cat_timeline(int(cat["id"]), limit=10)
+    latest_feed_event = next(
+        (event for event in reversed(feed_events) if event.get("event_type") == "feed"),
+        None,
+    )
+    payload["owned_cats"] = owned_cards
+    payload["growth_log"] = (
+        {
+            "title": latest_feed_event.get("title") or "进化完成",
+            "summary": build_feed_growth_summary(latest_feed_event.get("data") or {}),
+            "time": latest_feed_event.get("time") or "",
+        }
+        if latest_feed_event
+        else None
+    )
+    return payload
+
+
 def build_share_card_payload(cat: dict[str, Any]) -> dict[str, Any]:
     persona = parse_cat_profile(str(cat.get("final_persona_json") or ""))
     return {
@@ -448,12 +469,12 @@ def build_adoption_context(owned_count: int) -> dict[str, Any]:
     }
 
 
-def create_async_task(task_type: str, cat_id: int) -> dict[str, Any]:
+def create_async_task(task_type: str, cat_id: int | None = None) -> dict[str, Any]:
     task_id = uuid4().hex
     task = {
         "id": task_id,
         "type": task_type,
-        "cat_id": cat_id,
+        "cat_id": int(cat_id or 0),
         "status": "pending",
         "message": "任务排队中",
         "error": "",
@@ -536,6 +557,51 @@ async def run_feed_task(
         update_async_task(
             task_id, status="error", error=str(exc), message="喂养任务失败"
         )
+
+
+async def run_adopt_task(
+    task_id: str,
+    user_id: int,
+    owner_name: str,
+    breed: str,
+    color: str,
+    settings: dict[str, str],
+) -> None:
+    update_async_task(task_id, status="running", message="正在准备领养信息")
+    try:
+        owned_count = await asyncio.to_thread(count_user_owned_cats, int(user_id))
+        if owned_count >= 3:
+            raise ValueError("每位用户最多只能拥有 3 只猫")
+
+        await asyncio.to_thread(set_all_user_cats_inactive, int(user_id))
+        update_async_task(task_id, message="正在生成初始故事与形象")
+
+        ai_data = None
+        try:
+            ai_data = await asyncio.wait_for(
+                asyncio.to_thread(
+                    generate_initial_cat_ai_data,
+                    settings,
+                    owner_name,
+                    breed=breed,
+                    color=color,
+                ),
+                timeout=75,
+            )
+        except Exception:
+            ai_data = None
+
+        new_cat = await asyncio.to_thread(
+            create_initial_cat_for_user, int(user_id), owner_name, ai_data
+        )
+        update_async_task(
+            task_id,
+            status="done",
+            cat_id=int(new_cat.get("id") or 0),
+            message=f"已领养一只{color}{breed}",
+        )
+    except Exception as exc:
+        update_async_task(task_id, status="error", error=str(exc), message="领养失败")
 
 
 def submit_feed_for_current_user(request: Request, raw_input: str) -> RedirectResponse:
@@ -1057,7 +1123,36 @@ def current_cat_state(request: Request):
     cat = get_or_activate_user_cat(int(current_user["id"]))
     if not cat:
         raise HTTPException(status_code=404, detail="当前没有猫咪")
-    return JSONResponse(build_current_cat_payload(cat))
+    return JSONResponse(build_cat_sync_payload(int(current_user["id"]), cat))
+
+
+@app.post("/api/my-cat/adopt")
+async def my_cat_adopt_async(
+    request: Request,
+    breed: str = Form(...),
+    color: str = Form(...),
+):
+    current_user = get_or_create_session_user(request)
+    if not breed.strip() or not color.strip():
+        raise HTTPException(status_code=400, detail="请先选择猫咪的品种和颜色")
+    if count_user_owned_cats(int(current_user["id"])) >= 3:
+        raise HTTPException(status_code=400, detail="每位用户最多只能拥有 3 只猫")
+
+    settings = get_settings()
+    task = create_async_task("adopt")
+    asyncio.create_task(
+        run_adopt_task(
+            task["id"],
+            int(current_user["id"]),
+            str(current_user.get("username") or "未知主人"),
+            breed.strip(),
+            color.strip(),
+            settings,
+        )
+    )
+    return JSONResponse(
+        {"task_id": task["id"], "status": task["status"], "message": "领养任务已创建"}
+    )
 
 
 @app.get("/cats/{cat_id}/share-card.png")

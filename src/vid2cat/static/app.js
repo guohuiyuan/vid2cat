@@ -32,9 +32,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
 
     let activeTaskId = null;
+    let activeAdoptionTaskId = null;
     let typewriterTimer = null;
     let typewriterQueue = "";
     let typewriterStreamDone = false;
+    let lastGrowthLogKey = "";
 
     const setTaskStatus = (text, variant = "progress") => {
         if (!taskStatusBar) return;
@@ -46,6 +48,12 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!taskStatusBar) return;
         taskStatusBar.textContent = "";
         taskStatusBar.className = "task-status-bar hidden";
+    };
+
+    const clearAdoptionLoadingSlots = () => {
+        document.querySelectorAll("[data-adoption-loading-slot]").forEach((el) => {
+            el.remove();
+        });
     };
 
     const scrollChatToBottom = () => {
@@ -196,14 +204,48 @@ document.addEventListener("DOMContentLoaded", () => {
         button.addEventListener("click", closeImagePreview);
     });
 
+    const buildGrowthLogText = (log) => {
+        if (!log) return "";
+        const title = log.title ? `[${log.title}] ` : "";
+        const timeSuffix = log.time ? `（${log.time}）` : "";
+        return `${title}${log.summary || "本次已完成进化。"}${timeSuffix}`;
+    };
+
     if (adoptionForm) {
-        adoptionForm.addEventListener("submit", () => {
+        adoptionForm.addEventListener("submit", async (event) => {
+            event.preventDefault();
+            if (activeAdoptionTaskId) {
+                appendEventMessage("已有一只猫正在生成中，稍等它完成后再领养下一只。", "progress");
+                return;
+            }
+
+            const formData = new FormData(adoptionForm);
+            const breed = String(formData.get("breed") || "").trim();
+            const color = String(formData.get("color") || "").trim();
+            if (!breed || !color) {
+                appendEventMessage("请先选择品种和颜色。", "error");
+                return;
+            }
+
             if (adoptionLoadingGrid) {
                 if (ownedCatsGrid) {
-                    const loadingCard = adoptionLoadingGrid.querySelector("#adoption-loading-card");
-                    if (loadingCard && !ownedCatsGrid.contains(loadingCard)) {
-                        ownedCatsGrid.appendChild(loadingCard);
-                    }
+                    clearAdoptionLoadingSlots();
+                    ownedCatsGrid.insertAdjacentHTML(
+                        "beforeend",
+                        `<article class="cat-switch-card cat-switch-card-loading" data-adoption-loading-slot aria-label="新猫咪正在生成中">
+                            <div class="cat-switch-thumb skeleton-box"></div>
+                            <div class="cat-switch-body">
+                                <div class="cat-switch-top">
+                                    <h3>新猫咪生成中...</h3>
+                                    <span class="pill muted">准备中</span>
+                                </div>
+                                <div class="pill-row compact">
+                                    <span class="pill muted">正在匹配品种</span>
+                                    <span class="pill muted">正在生成形象</span>
+                                </div>
+                            </div>
+                        </article>`,
+                    );
                     adoptionLoadingGrid.classList.add("hidden");
                 } else {
                     adoptionLoadingGrid.classList.remove("hidden");
@@ -216,7 +258,59 @@ document.addEventListener("DOMContentLoaded", () => {
                 adoptionDialog.classList.add("hidden");
                 adoptionDialog.setAttribute("aria-hidden", "true");
             }
-            showLoadingOverlay("正在领养中...", "正在为你生成新的猫咪形象，请稍等一下。");
+            updateDialogBodyState();
+            appendEventMessage(`已开始领养 ${color}${breed}，生成中...`, "progress");
+
+            try {
+                const response = await fetch("/api/my-cat/adopt", {
+                    method: "POST",
+                    body: formData,
+                });
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.detail || "领养任务提交失败");
+                }
+                activeAdoptionTaskId = payload.task_id;
+
+                const pollAdoption = async () => {
+                    if (!activeAdoptionTaskId) {
+                        return;
+                    }
+                    const taskResponse = await fetch(`/api/tasks/${activeAdoptionTaskId}`);
+                    const task = await taskResponse.json();
+                    if (!taskResponse.ok) {
+                        throw new Error(task.detail || "领养状态获取失败");
+                    }
+                    if (task.status === "pending" || task.status === "running") {
+                        const progressText = `领养中：${task.message || "请稍候"}`;
+                        setTaskStatus(progressText, "progress");
+                        window.setTimeout(pollAdoption, 1400);
+                        return;
+                    }
+                    activeAdoptionTaskId = null;
+                    if (task.status === "done") {
+                        await refreshCatPanel();
+                        clearAdoptionLoadingSlots();
+                        if (adoptionLoadingGrid) {
+                            adoptionLoadingGrid.classList.add("hidden");
+                        }
+                        setTaskStatus(task.message || "领养完成", "done");
+                        appendEventMessage(task.message || "领养完成，可以开始互动啦。", "done");
+                        return;
+                    }
+                    throw new Error(task.error || task.message || "领养失败");
+                };
+
+                void pollAdoption();
+            } catch (error) {
+                activeAdoptionTaskId = null;
+                clearAdoptionLoadingSlots();
+                if (adoptionLoadingGrid) {
+                    adoptionLoadingGrid.classList.add("hidden");
+                }
+                setTaskStatus(error.message || "领养失败", "error");
+                appendEventMessage(error.message || "领养失败", "error");
+            }
         });
     }
 
@@ -395,6 +489,61 @@ document.addEventListener("DOMContentLoaded", () => {
             .join("");
     };
 
+    const refreshOwnedCards = (ownedCats) => {
+        if (!Array.isArray(ownedCats) || ownedCats.length === 0) {
+            return;
+        }
+        ownedCats.forEach((owned) => {
+            const card = document.querySelector(`[data-owned-cat-id="${owned.id}"]`);
+            if (!card) {
+                return;
+            }
+
+            const thumb = card.querySelector(".cat-switch-thumb");
+            const image = card.querySelector(".owned-cat-image");
+            const placeholder = card.querySelector(".owned-cat-placeholder");
+            if (thumb) {
+                if (owned.image_url) {
+                    if (image) {
+                        image.src = owned.image_url;
+                        image.alt = owned.cat_name;
+                    } else {
+                        thumb.innerHTML = `<img class="owned-cat-image" src="${owned.image_url}" alt="${owned.cat_name}">`;
+                    }
+                } else {
+                    const firstChar = (owned.cat_name || "猫").slice(0, 1);
+                    if (placeholder) {
+                        placeholder.textContent = firstChar;
+                    } else {
+                        thumb.innerHTML = `<div class="cat-switch-placeholder owned-cat-placeholder">${firstChar}</div>`;
+                    }
+                }
+            }
+
+            const setCardText = (selector, text) => {
+                const el = card.querySelector(selector);
+                if (el) el.textContent = text;
+            };
+            setCardText(".owned-cat-name", owned.cat_name || "未命名猫咪");
+            setCardText(".owned-cat-stage", owned.stage || "初始态");
+            setCardText(".owned-cat-level", `Lv.${owned.level || 0}`);
+            setCardText(".owned-cat-feed", `喂养 ${owned.feed_count || 0}/${owned.max_feed_count || 6}`);
+            setCardText(".owned-cat-power", `总属性 ${owned.overall_power || 0}`);
+
+            const previewButton = card.querySelector("[data-preview-image]");
+            if (previewButton) {
+                previewButton.dataset.previewImage = `/cats/${owned.id}/share-card.png`;
+                previewButton.setAttribute("aria-label", `预览 ${owned.cat_name || "猫咪"} 的分享卡`);
+            }
+
+            const shareButton = card.querySelector("[data-share-card-id]");
+            if (shareButton) {
+                shareButton.dataset.shareCardId = String(owned.id);
+                shareButton.dataset.shareCardName = owned.cat_name || "这只小猫";
+            }
+        });
+    };
+
     const refreshCatPanel = async (incomingCat = null) => {
         if (!interactionForm) return;
         let cat = incomingCat;
@@ -477,7 +626,10 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             interactionInput.dataset.feedLockedMessage = cat.feed_gate_hint || "当前暂时不能喂养。";
         }
+
+        refreshOwnedCards(cat.owned_cats);
         updateInteractionUi();
+        return cat;
     };
 
     const submitTraining = async (actionKey, triggerButton) => {
@@ -574,12 +726,20 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
                 if (task.status === "done") {
-                    await refreshCatPanel();
+                    const refreshedCat = await refreshCatPanel();
                     const text = `${task.message || "进化完成"}，新形象已自动刷新。`;
                     setTaskStatus(text, "done");
                     if (statusBubble) {
                         statusBubble.textContent = text;
                         statusBubble.className = "message-content timeline-style task-done";
+                    }
+                    const logText = buildGrowthLogText(refreshedCat?.growth_log);
+                    if (logText) {
+                        const logKey = `${refreshedCat?.id || "cat"}-${logText}`;
+                        if (lastGrowthLogKey !== logKey) {
+                            appendEventMessage(logText, "done");
+                            lastGrowthLogKey = logKey;
+                        }
                     }
                     activeTaskId = null;
                     return;
