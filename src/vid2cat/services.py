@@ -731,11 +731,9 @@ def generate_initial_cat_ai_data(
     username: str,
     breed: str = "",
     color: str = "",
-    image_url: str = "",
 ) -> dict[str, Any]:
     selected_breed = breed.strip() or "初始动漫猫"
     selected_color = color.strip() or "奶油白"
-    preferred_image_url = image_url.strip()
     default_prompt = build_initial_adoption_prompt(username, selected_breed, selected_color)
     config2 = build_model_config(settings, 2)
     system_prompt2 = (
@@ -768,14 +766,13 @@ def generate_initial_cat_ai_data(
         "image_prompt": str(data2.get("image_prompt") or default_prompt),
     }
 
-    final_image_url = preferred_image_url
-    if not final_image_url:
-        try:
-            image_result = generate_cat_image_with_model3(settings, profile["name"], profile["story"], profile)
-            final_image_url = image_result["url"]
-            profile["image_prompt"] = image_result.get("prompt") or profile["image_prompt"]
-        except Exception:
-            pass
+    final_image_url = ""
+    try:
+        image_result = generate_cat_image_with_model3(settings, profile["name"], profile["story"], profile)
+        final_image_url = image_result["url"]
+        profile["image_prompt"] = image_result.get("prompt") or profile["image_prompt"]
+    except Exception:
+        pass
 
     return {
         "profile": profile,

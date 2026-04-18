@@ -71,7 +71,7 @@
             <div class="section-title-row">
                 <div>
                     <h2>{{ "第一次领养" if needs_initial_adoption else "领养下一只猫" }}</h2>
-                    <span class="section-hint">先选择品种和颜色；如果没有图片，系统会用预设提示词自动生成初始形象</span>
+                    <span class="section-hint">先选择品种和颜色；系统会基于预设提示词自动生成初始形象</span>
                 </div>
             </div>
             <form class="stack-form" action="/my-cat/adopt" method="POST">
@@ -91,10 +91,6 @@
                             <option value="{{ color }}">{{ color }}</option>
                             {% endfor %}
                         </select>
-                    </label>
-                    <label class="adoption-grid-wide">
-                        <span>图片链接（选填）</span>
-                        <input type="text" name="image_url" placeholder="可填现成图片链接；留空则自动调用预设提示词生成形象">
                     </label>
                 </div>
                 <div class="form-footer-hint">

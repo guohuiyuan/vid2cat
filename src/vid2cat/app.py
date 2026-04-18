@@ -981,7 +981,6 @@ def my_cat_adopt_new(
     request: Request,
     breed: str = Form(...),
     color: str = Form(...),
-    image_url: str = Form(default=""),
 ):
     current_user = get_or_create_session_user(request)
     if not breed.strip() or not color.strip():
@@ -997,7 +996,6 @@ def my_cat_adopt_new(
             current_user["username"],
             breed=breed,
             color=color,
-            image_url=image_url,
         )
     except Exception:
         pass
