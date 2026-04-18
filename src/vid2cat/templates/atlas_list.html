@@ -45,7 +45,7 @@
         <section class="content-card">
             <div class="section-title-row">
                 <h2>图鉴列表</h2>
-                <span class="section-hint">展示猫咪名字、品种和 AI 生成图</span>
+                <span class="section-hint">仅展示猫咪名字、品种和 AI 生成图，详细内容点击进入</span>
             </div>
             {% if atlas_cards %}
             <div class="atlas-grid">
@@ -63,13 +63,6 @@
                         <h3>{{ atlas.cat_name }}</h3>
                         <p class="atlas-subtitle">{{ atlas.breed }}</p>
                         <p>{{ atlas.summary }}</p>
-                        {% if atlas.video_url %}
-                        <div class="atlas-video-wrap">
-                            <video class="atlas-video" controls preload="metadata">
-                                <source src="{{ atlas.video_url }}">
-                            </video>
-                        </div>
-                        {% endif %}
                         <div class="action-row atlas-card-actions">
                             <a class="ghost-btn" href="/atlas/{{ atlas.id }}">查看详情</a>
                         </div>

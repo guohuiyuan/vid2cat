@@ -568,19 +568,6 @@ button:hover,
     height: 240px;
 }
 
-.atlas-video-wrap {
-    margin-top: 14px;
-    overflow: hidden;
-    border-radius: 18px;
-    background: #101828;
-}
-
-.atlas-video {
-    width: 100%;
-    display: block;
-    max-height: 220px;
-}
-
 .atlas-card-actions {
     margin-top: 14px;
 }
@@ -609,6 +596,10 @@ button:hover,
 .moment-item strong {
     display: block;
     margin-bottom: 6px;
+}
+
+.pet-meta-row {
+    margin-bottom: 14px;
 }
 
 .info-panel input + input,
