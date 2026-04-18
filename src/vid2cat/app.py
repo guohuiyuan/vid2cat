@@ -31,7 +31,7 @@ from .db import (
     verify_password,
 )
 from .integrations import ImageHostScaffold
-from .services import build_search_candidates, is_douyin_url, parse_cat_profile, parse_douyin_to_atlas
+from .services import build_search_candidates, is_douyin_url, parse_cat_profile, parse_douyin_to_atlas, parse_model1_analysis
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -61,6 +61,7 @@ def build_atlas_card(atlas: dict) -> dict:
         "cat_name": cat_name,
         "breed": breed,
         "image_url": image_url,
+        "video_url": atlas.get("video_url") or "",
         "rarity": profile.get("rarity") or "待定",
         "summary": summary,
         "title": atlas.get("title") or "",
@@ -221,6 +222,7 @@ def atlas_detail(
         raise HTTPException(status_code=404, detail="图鉴不存在")
     settings = get_settings()
     cat_profile = parse_cat_profile(atlas.get("cat_profile_json") or "")
+    model1_analysis = parse_model1_analysis(atlas.get("model1_output") or "")
     ordered_profile_items = [
         {"key": key, "label": CAT_PROFILE_LABELS.get(key, key), "value": cat_profile[key]}
         for key in CAT_PROFILE_LABELS
@@ -244,6 +246,7 @@ def atlas_detail(
             "error": error,
             "admin_user": get_current_admin(request),
             "cat_display_name": cat_profile.get("name") or cat_profile.get("breed") or atlas.get("title"),
+            "model1_analysis": model1_analysis,
         },
     )
 

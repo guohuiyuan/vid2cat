@@ -50,7 +50,7 @@
             {% if atlas_cards %}
             <div class="atlas-grid">
                 {% for atlas in atlas_cards %}
-                <a class="atlas-card atlas-gallery-card" href="/atlas/{{ atlas.id }}">
+                <article class="atlas-card atlas-gallery-card">
                     <div class="atlas-cover {% if not atlas.image_url %}placeholder-cover{% endif %}">
                         {% if atlas.image_url %}
                         <img src="{{ atlas.image_url }}" alt="{{ atlas.cat_name }}">
@@ -63,8 +63,18 @@
                         <h3>{{ atlas.cat_name }}</h3>
                         <p class="atlas-subtitle">{{ atlas.breed }}</p>
                         <p>{{ atlas.summary }}</p>
+                        {% if atlas.video_url %}
+                        <div class="atlas-video-wrap">
+                            <video class="atlas-video" controls preload="metadata">
+                                <source src="{{ atlas.video_url }}">
+                            </video>
+                        </div>
+                        {% endif %}
+                        <div class="action-row atlas-card-actions">
+                            <a class="ghost-btn" href="/atlas/{{ atlas.id }}">查看详情</a>
+                        </div>
                     </div>
-                </a>
+                </article>
                 {% endfor %}
             </div>
             {% else %}

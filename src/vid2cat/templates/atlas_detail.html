@@ -58,7 +58,7 @@
         <section class="content-card">
             <div class="section-title-row">
                 <h2>宠物图鉴详情</h2>
-                <span class="section-hint">用户界面只展示宠物信息，提示词和模型输出移到管理员后台</span>
+                <span class="section-hint">保留宠物信息与视频分析结果，提示词和模型原始输出仍放在管理员后台</span>
             </div>
             {% if atlas.cat_image_url %}
             <div class="generated-image-card">
@@ -75,6 +75,107 @@
                 {% endif %}
                 {% endfor %}
             </div>
+        </section>
+
+        <section class="content-card">
+            <div class="section-title-row">
+                <h2>视频分析</h2>
+                <span class="section-hint">保留爆款潜力打分、关键时间段、完整总结、优化建议、标签和多视角评价</span>
+            </div>
+            {% if atlas.video_url %}
+            <div class="media-card">
+                <video class="preview-video" controls preload="metadata" poster="{{ atlas.cover_url or atlas.cat_image_url or '' }}">
+                    <source src="{{ atlas.video_url }}">
+                </video>
+            </div>
+            {% endif %}
+
+            {% if model1_analysis %}
+            <div class="score-grid">
+                <div class="score-card">
+                    <span>总分</span>
+                    <strong>{{ model1_analysis.total_score }}</strong>
+                </div>
+                <div class="score-card">
+                    <span>快乐</span>
+                    <strong>{{ model1_analysis.happiness_score }}</strong>
+                </div>
+                <div class="score-card">
+                    <span>知识</span>
+                    <strong>{{ model1_analysis.knowledge_score }}</strong>
+                </div>
+                <div class="score-card">
+                    <span>节奏</span>
+                    <strong>{{ model1_analysis.rhythm_score }}</strong>
+                </div>
+                <div class="score-card">
+                    <span>共鸣</span>
+                    <strong>{{ model1_analysis.resonance_score }}</strong>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h3>视频关键时间段内容梗概</h3>
+                {% if model1_analysis.key_moments %}
+                <div class="moment-list">
+                    {% for moment in model1_analysis.key_moments %}
+                    <div class="moment-item">
+                        <strong>{{ moment.time_range }}</strong>
+                        <p>{{ moment.summary }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p>当前没有关键时间段分析。</p>
+                {% endif %}
+            </div>
+
+            <div class="info-panel">
+                <h3>完整视频内容总结</h3>
+                <p>{{ model1_analysis.full_summary or atlas.ai_summary or "当前没有完整总结" }}</p>
+            </div>
+
+            <div class="info-panel">
+                <h3>视频优化建议</h3>
+                {% if model1_analysis.optimization_tips %}
+                <div class="moment-list">
+                    {% for tip in model1_analysis.optimization_tips %}
+                    <div class="moment-item">
+                        <p>{{ tip }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p>{{ atlas.optimization_tips or "当前没有优化建议" }}</p>
+                {% endif %}
+            </div>
+
+            <div class="info-panel">
+                <h3>精准视频标签</h3>
+                <div class="pill-row compact">
+                    {% for tag in model1_analysis.tags %}
+                    <span class="pill muted">{{ tag }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="profile-grid">
+                <div class="profile-item">
+                    <span>审核视角</span>
+                    <strong>{{ model1_analysis.perspectives.review or "当前没有审核视角分析" }}</strong>
+                </div>
+                <div class="profile-item">
+                    <span>观众视角</span>
+                    <strong>{{ model1_analysis.perspectives.audience or "当前没有观众视角分析" }}</strong>
+                </div>
+                <div class="profile-item">
+                    <span>作者视角</span>
+                    <strong>{{ model1_analysis.perspectives.author or "当前没有作者视角分析" }}</strong>
+                </div>
+            </div>
+            {% else %}
+            <div class="empty-state">当前还没有结构化视频分析结果。</div>
+            {% endif %}
         </section>
 
         <section class="content-card">

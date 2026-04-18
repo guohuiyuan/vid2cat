@@ -568,6 +568,23 @@ button:hover,
     height: 240px;
 }
 
+.atlas-video-wrap {
+    margin-top: 14px;
+    overflow: hidden;
+    border-radius: 18px;
+    background: #101828;
+}
+
+.atlas-video {
+    width: 100%;
+    display: block;
+    max-height: 220px;
+}
+
+.atlas-card-actions {
+    margin-top: 14px;
+}
+
 .prompt-example-list {
     display: grid;
     gap: 14px;
@@ -575,6 +592,23 @@ button:hover,
 
 .prompt-gap {
     margin-top: 16px;
+}
+
+.moment-list {
+    display: grid;
+    gap: 10px;
+}
+
+.moment-item {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: #f8fafc;
+}
+
+.moment-item strong {
+    display: block;
+    margin-bottom: 6px;
 }
 
 .info-panel input + input,
