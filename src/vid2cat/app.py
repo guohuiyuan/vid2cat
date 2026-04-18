@@ -276,6 +276,31 @@ def build_training_cards() -> list[dict[str, Any]]:
     ]
 
 
+def build_current_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
+    exp_progress = build_exp_progress(cat)
+    can_feed, feed_gate_hint = get_feed_gate_status(cat)
+    return {
+        "id": int(cat["id"]),
+        "name": str(cat.get("name") or "未命名猫咪"),
+        "image_url": str(cat.get("image_url") or ""),
+        "stage": str(cat.get("stage") or "初始态"),
+        "level": int(cat.get("level") or 0),
+        "feed_count": int(cat.get("feed_count") or 0),
+        "max_feed_count": int(cat.get("max_feed_count") or MAX_CAT_LEVEL),
+        "remaining_feeds": max(0, int(cat.get("max_feed_count") or MAX_CAT_LEVEL) - int(cat.get("feed_count") or 0)),
+        "overall_power": int(cat.get("overall_power") or 0),
+        "personality": str(cat.get("personality") or ""),
+        "story_summary": str(cat.get("story_summary") or ""),
+        "latest_summary": str(cat.get("latest_summary") or ""),
+        "highest_level_owner_name": str(cat.get("highest_level_owner_name") or ""),
+        "highest_level_reached": int(cat.get("highest_level_reached") or 0),
+        "exp_progress": exp_progress,
+        "skill_badges": build_skill_badges(cat),
+        "feed_gate_hint": feed_gate_hint,
+        "can_feed": can_feed,
+    }
+
+
 def get_feed_gate_status(cat: dict[str, Any] | None) -> tuple[bool, str]:
     if not cat:
         return False, "请先领养第一只猫。"
@@ -776,6 +801,17 @@ def task_status(task_id: str):
     return JSONResponse(task)
 
 
+@app.get("/api/my-cat/current")
+def current_cat_state(request: Request):
+    current_user = get_current_user(request)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="请先登录")
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        raise HTTPException(status_code=404, detail="当前没有猫咪")
+    return JSONResponse(build_current_cat_payload(cat))
+
+
 @app.post("/my-cat/adopt")
 @app.post("/my-cat/adopt-new")
 def my_cat_adopt_new(
@@ -1094,6 +1130,12 @@ def admin_dashboard(
             "message": message,
             "error": error,
             "admin": admin,
+            "current_user": admin,
+            "admin_user": admin,
+            "header_dropdown_links": [
+                {"href": "/admin/password", "label": "修改密码"},
+                {"href": "/admin/logout", "label": "退出后台"},
+            ],
             "settings": settings,
             "uploaded_url": uploaded_url,
             "image_host_status": ImageHostScaffold.describe(settings),

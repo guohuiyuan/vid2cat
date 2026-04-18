@@ -1,32 +1,8 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>管理员后台 - vid2cat</title>
-    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
-</head>
-<body>
-    <header class="site-header">
-        <div class="header-container">
-            <a href="/" class="site-logo">vid2cat</a>
-            <nav class="nav-links">
-                <a href="/">前台</a>
-                <a href="/my-cat">我的猫</a>
-                <a href="/plaza">猫咪市场</a>
-                <div class="user-dropdown">
-                    <button class="user-dropdown-btn">
-                        {{ admin.username }}
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                    </button>
-                    <div class="user-dropdown-menu">
-                        <a href="/admin/password">修改密码</a>
-                        <a href="/admin/logout">退出后台</a>
-                    </div>
-                </div>
-            </nav>
-        </div>
-    </header>
+{% extends "index.html" %}
+
+{% block title %}管理员后台 - vid2cat{% endblock %}
+
+{% block content %}
     <div class="page-shell">
         {% if message %}
         <div class="notice success">{{ message }}</div>
@@ -161,5 +137,4 @@
             </aside>
         </section>
     </div>
-</body>
-</html>
+{% endblock %}

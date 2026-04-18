@@ -1,5 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
-    const loadingOverlay = document.getElementById("parse-loading");
+    const taskStatusBar = document.getElementById("task-status-bar");
     const interactionForm = document.getElementById("interaction-form");
     const interactionInput = document.getElementById("interaction-input");
     const interactionSubmitButton = document.getElementById("interaction-submit-btn");
@@ -8,20 +8,20 @@ document.addEventListener("DOMContentLoaded", () => {
     const starRatings = document.querySelectorAll("[data-star-rating]");
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
 
-    const setOverlay = (title, text) => {
-        if (!loadingOverlay) return;
-        const loadingTitle = loadingOverlay.querySelector("h3");
-        const loadingTextEl = loadingOverlay.querySelector("p");
-        if (loadingTitle) loadingTitle.textContent = title;
-        if (loadingTextEl) loadingTextEl.textContent = text;
-        loadingOverlay.classList.remove("hidden");
-        loadingOverlay.setAttribute("aria-hidden", "false");
+    let activeTaskId = null;
+    let typewriterTimer = null;
+    let typewriterQueue = "";
+
+    const setTaskStatus = (text, variant = "progress") => {
+        if (!taskStatusBar) return;
+        taskStatusBar.textContent = text;
+        taskStatusBar.className = `task-status-bar ${variant}`;
     };
 
-    const hideOverlay = () => {
-        if (!loadingOverlay) return;
-        loadingOverlay.classList.add("hidden");
-        loadingOverlay.setAttribute("aria-hidden", "true");
+    const clearTaskStatus = () => {
+        if (!taskStatusBar) return;
+        taskStatusBar.textContent = "";
+        taskStatusBar.className = "task-status-bar hidden";
     };
 
     const scrollChatToBottom = () => {
@@ -43,6 +43,145 @@ document.addEventListener("DOMContentLoaded", () => {
         chatMessages.appendChild(wrapper);
         scrollChatToBottom();
         return bubble;
+    };
+
+    const appendEventMessage = (content, variant = "progress") => {
+        if (!chatMessages) return null;
+        const wrapper = document.createElement("div");
+        wrapper.className = "message assistant timeline-event-msg";
+        const bubble = document.createElement("div");
+        bubble.className = `message-content timeline-style task-${variant}`;
+        bubble.textContent = content;
+        wrapper.appendChild(bubble);
+        chatMessages.appendChild(wrapper);
+        scrollChatToBottom();
+        return bubble;
+    };
+
+    const flushTypewriter = (bubble) => {
+        if (!bubble || !typewriterQueue) return;
+        const chunkSize = Math.min(3, typewriterQueue.length);
+        bubble.textContent += typewriterQueue.slice(0, chunkSize);
+        typewriterQueue = typewriterQueue.slice(chunkSize);
+        scrollChatToBottom();
+        if (!typewriterQueue) {
+            typewriterTimer = null;
+            return;
+        }
+        typewriterTimer = window.setTimeout(() => flushTypewriter(bubble), 18);
+    };
+
+    const queueTypewriterToken = (bubble, token) => {
+        if (!bubble || !token) return;
+        typewriterQueue += token;
+        if (typewriterTimer === null) {
+            flushTypewriter(bubble);
+        }
+    };
+
+    const finishTypewriter = (bubble) => {
+        if (!bubble || !typewriterQueue) return;
+        if (typewriterTimer !== null) {
+            window.clearTimeout(typewriterTimer);
+            typewriterTimer = null;
+        }
+        bubble.textContent += typewriterQueue;
+        typewriterQueue = "";
+        scrollChatToBottom();
+    };
+
+    const renderSkillBadges = (skillBadges) => {
+        if (!Array.isArray(skillBadges) || skillBadges.length === 0) {
+            return "还没有学会技能，先把经验练满后喂第一个视频。";
+        }
+        return skillBadges
+            .map(
+                (badge) =>
+                    `<span class="skill-badge ${badge.class}"><span class="skill-rarity">${badge.rarity}</span>${badge.name}</span>`,
+            )
+            .join("");
+    };
+
+    const refreshCatPanel = async () => {
+        if (!interactionForm) return;
+        const refreshEndpoint = interactionForm.dataset.refreshEndpoint || "/api/my-cat/current";
+        const response = await fetch(refreshEndpoint);
+        const cat = await response.json();
+        if (!response.ok) {
+            throw new Error(cat.detail || "刷新猫咪状态失败");
+        }
+
+        const avatarCard = document.getElementById("cat-avatar-card");
+        if (avatarCard) {
+            avatarCard.innerHTML = cat.image_url
+                ? `<img id="cat-avatar-image" src="${cat.image_url}" alt="${cat.name}">`
+                : `<div id="cat-avatar-placeholder" class="cat-avatar-placeholder"><span>${cat.name.slice(0, 1)}</span></div>`;
+            avatarCard.dataset.catName = cat.name;
+        }
+
+        const setText = (id, text) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = text;
+        };
+        setText("cat-level-pill", `等级：${cat.level}/6`);
+        setText("cat-stage-pill", `阶段：${cat.stage}`);
+        setText("cat-remaining-feed-pill", `剩余喂养 ${cat.remaining_feeds} 次`);
+        setText("cat-level-value", `${cat.level}/6`);
+        setText("cat-feed-count-value", `${cat.feed_count}/${cat.max_feed_count}`);
+        setText("cat-overall-power", `${cat.overall_power}`);
+        setText("cat-exp-text", cat.exp_progress.exp_to_next > 0 ? `${cat.exp_progress.exp}/${cat.exp_progress.exp_to_next}` : "已满级");
+        setText("cat-feed-gate-hint", cat.feed_gate_hint);
+        setText(
+            "cat-owner-text",
+            `@${cat.highest_level_owner_name || "未知主人"} 把它带到了 ${cat.highest_level_reached || cat.level} 级。后续若等级没有再突破，这个名字就不会被改写。`,
+        );
+        setText("cat-personality", cat.personality || "");
+        setText("cat-story-summary", cat.story_summary || "");
+        setText("cat-latest-summary", cat.latest_summary || "还没有新的成长记录。");
+
+        const expFill = document.getElementById("cat-exp-fill");
+        if (expFill) {
+            expFill.style.width = `${cat.exp_progress.percent}%`;
+        }
+        const levelValue = document.getElementById("cat-level-value");
+        if (levelValue) {
+            levelValue.classList.toggle("limit-reached", cat.level >= 6);
+        }
+        const feedCountValue = document.getElementById("cat-feed-count-value");
+        if (feedCountValue) {
+            feedCountValue.classList.toggle("limit-reached", cat.feed_count >= cat.max_feed_count);
+        }
+        const expPill = document.getElementById("cat-exp-pill");
+        if (expPill) {
+            expPill.className = `pill${cat.exp_progress.exp_to_next <= 0 || cat.can_feed ? " active" : " muted"}`;
+            expPill.textContent =
+                cat.exp_progress.exp_to_next <= 0
+                    ? "满级完成"
+                    : cat.can_feed
+                      ? "已充满"
+                      : `还差 ${cat.exp_progress.remaining}`;
+        }
+
+        const skillContainer = document.getElementById("cat-skill-badges");
+        if (skillContainer) {
+            if (Array.isArray(cat.skill_badges) && cat.skill_badges.length > 0) {
+                skillContainer.className = "pill-row compact";
+                skillContainer.innerHTML = renderSkillBadges(cat.skill_badges);
+            } else {
+                skillContainer.className = "";
+                skillContainer.textContent = "还没有学会技能，先把经验练满后喂第一个视频。";
+            }
+        }
+
+        if (interactionInput) {
+            if (cat.can_feed) {
+                interactionInput.removeAttribute("data-feed-locked");
+            } else {
+                interactionInput.dataset.feedLocked = "true";
+            }
+            interactionInput.dataset.feedLockedMessage = cat.feed_gate_hint || "当前暂时不能喂养。";
+        }
+        updateInteractionUi();
     };
 
     const containsDouyinUrl = (text) => douyinPattern.test(text || "");
@@ -73,7 +212,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (interactionForm && interactionInput && interactionSubmitButton && chatMessages) {
         const submitFeed = async (rawInput) => {
-            setOverlay("正在分析抖音内容", "系统正在解析抖音内容并准备刷新猫咪形象。");
             const formData = new FormData();
             formData.append("raw_input", rawInput);
             const response = await fetch(interactionForm.dataset.feedEndpoint || "/api/my-cat/feed", {
@@ -86,6 +224,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
 
             const taskId = payload.task_id;
+            activeTaskId = taskId;
+            const statusBubble = appendEventMessage("进化中：正在分析抖音内容并准备刷新猫咪形象。", "progress");
+            setTaskStatus("进化中：正在分析抖音内容并准备刷新猫咪形象。", "progress");
+            interactionInput.value = "";
+            updateInteractionUi();
+
             const poll = async () => {
                 const taskResponse = await fetch(`/api/tasks/${taskId}`);
                 const task = await taskResponse.json();
@@ -93,21 +237,35 @@ document.addEventListener("DOMContentLoaded", () => {
                     throw new Error(task.detail || "任务状态获取失败");
                 }
                 if (task.status === "running" || task.status === "pending") {
-                    setOverlay("正在处理中", task.message || "请稍候");
+                    const text = `进化中：${task.message || "请稍候"}`;
+                    setTaskStatus(text, "progress");
+                    if (statusBubble) {
+                        statusBubble.textContent = text;
+                    }
                     window.setTimeout(poll, 1500);
                     return;
                 }
                 if (task.status === "done") {
-                    setOverlay("处理完成", task.message || "猫咪成长完成");
-                    window.setTimeout(() => {
-                        window.location.href = `/my-cat?message=${encodeURIComponent(task.message || "处理完成")}`;
-                    }, 600);
+                    await refreshCatPanel();
+                    const text = `${task.message || "进化完成"}，新形象已自动刷新。`;
+                    setTaskStatus(text, "done");
+                    if (statusBubble) {
+                        statusBubble.textContent = text;
+                        statusBubble.className = "message-content timeline-style task-done";
+                    }
+                    activeTaskId = null;
                     return;
                 }
-                throw new Error(task.error || task.message || "任务执行失败");
+                const errorText = task.error || task.message || "任务执行失败";
+                clearTaskStatus();
+                if (statusBubble) {
+                    statusBubble.textContent = errorText;
+                    statusBubble.className = "message-content timeline-style task-error";
+                }
+                activeTaskId = null;
             };
 
-            poll();
+            void poll();
         };
 
         const submitChat = async (content) => {
@@ -116,6 +274,11 @@ document.addEventListener("DOMContentLoaded", () => {
             interactionInput.value = "";
             updateInteractionUi();
             const assistantBubble = appendMessage("assistant", "");
+            typewriterQueue = "";
+            if (typewriterTimer !== null) {
+                window.clearTimeout(typewriterTimer);
+                typewriterTimer = null;
+            }
 
             const formData = new FormData();
             formData.append("content", content);
@@ -148,12 +311,12 @@ document.addEventListener("DOMContentLoaded", () => {
                     if (!line) continue;
                     const payload = JSON.parse(line.slice(6));
                     if (payload.type === "token") {
-                        if (assistantBubble) {
-                            assistantBubble.textContent += payload.token;
-                        }
-                        scrollChatToBottom();
+                        queueTypewriterToken(assistantBubble, payload.token);
                     } else if (payload.type === "error" && assistantBubble) {
+                        finishTypewriter(assistantBubble);
                         assistantBubble.textContent = payload.message;
+                    } else if (payload.type === "done" && assistantBubble) {
+                        finishTypewriter(assistantBubble);
                     }
                 }
             }
@@ -163,6 +326,10 @@ document.addEventListener("DOMContentLoaded", () => {
         updateInteractionUi();
 
         interactionForm.addEventListener("submit", async (event) => {
+            const submitter = event.submitter;
+            if (submitter && submitter.name === "action_key") {
+                return;
+            }
             event.preventDefault();
             const content = interactionInput.value.trim();
             if (!content) return;
@@ -173,6 +340,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             try {
                 if (isFeed) {
+                    if (activeTaskId) {
+                        throw new Error("当前已有一次进化在进行中，先等待这次完成。");
+                    }
                     if (feedLocked) {
                         throw new Error(interactionInput.dataset.feedLockedMessage || "当前暂时不能喂养，只能聊天。");
                     }
@@ -181,8 +351,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     await submitChat(content);
                 }
             } catch (error) {
-                hideOverlay();
-                window.location.href = `/my-cat?error=${encodeURIComponent(error.message || "处理失败")}`;
+                clearTaskStatus();
+                appendEventMessage(error.message || "处理失败", "error");
             } finally {
                 interactionSubmitButton.disabled = false;
                 interactionInput.focus();
@@ -192,7 +362,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         window.addEventListener("pageshow", () => {
             interactionSubmitButton.disabled = false;
-            hideOverlay();
+            clearTaskStatus();
             updateInteractionUi();
         });
     }

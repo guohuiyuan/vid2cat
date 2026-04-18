@@ -116,9 +116,9 @@
                     </div>
                     <div class="pill-row compact">
                         <span class="pill">编号：{{ cat.cat_no }}</span>
-                        <span class="pill muted">等级：{{ exp_progress.level }}/6</span>
-                        <span class="pill muted">阶段：{{ cat.stage }}</span>
-                        <span class="pill muted">剩余喂养 {{ remaining_feeds }} 次</span>
+                        <span id="cat-level-pill" class="pill muted">等级：{{ exp_progress.level }}/6</span>
+                        <span id="cat-stage-pill" class="pill muted">阶段：{{ cat.stage }}</span>
+                        <span id="cat-remaining-feed-pill" class="pill muted">剩余喂养 {{ remaining_feeds }} 次</span>
                         {% if cat.image_url %}
                         <form action="/my-cat/publish" method="POST">
                             <input type="hidden" name="is_public" value="{{ 0 if cat.is_public else 1 }}">
@@ -132,11 +132,11 @@
 
                 <div class="cat-stage-layout">
                     <div class="cat-stage-side">
-                        <div class="cat-avatar-card">
+                        <div id="cat-avatar-card" class="cat-avatar-card" data-cat-name="{{ cat.name }}">
                             {% if cat.image_url %}
-                            <img src="{{ cat.image_url }}" alt="{{ cat.name }}">
+                            <img id="cat-avatar-image" src="{{ cat.image_url }}" alt="{{ cat.name }}">
                             {% else %}
-                            <div class="cat-avatar-placeholder">
+                            <div id="cat-avatar-placeholder" class="cat-avatar-placeholder">
                                 <span>{{ cat.name[:1] }}</span>
                             </div>
                             {% endif %}
@@ -146,26 +146,26 @@
                             <div class="stats-row stats-row-tight">
                                 <div class="stat-box">
                                     <span class="label">当前等级</span>
-                                    <strong class="{% if exp_progress.level >= 6 %}limit-reached{% endif %}">
+                                    <strong id="cat-level-value" class="{% if exp_progress.level >= 6 %}limit-reached{% endif %}">
                                         {{ exp_progress.level }}/6
                                     </strong>
                                 </div>
                                 <div class="stat-box">
                                     <span class="label">喂养次数</span>
-                                    <strong class="{% if cat.feed_count >= cat.max_feed_count %}limit-reached{% endif %}">
+                                    <strong id="cat-feed-count-value" class="{% if cat.feed_count >= cat.max_feed_count %}limit-reached{% endif %}">
                                         {{ cat.feed_count }}/{{ cat.max_feed_count }}
                                     </strong>
                                 </div>
                                 <div class="stat-box">
                                     <span class="label">总属性</span>
-                                    <strong>{{ cat.overall_power }}</strong>
+                                    <strong id="cat-overall-power">{{ cat.overall_power }}</strong>
                                 </div>
                             </div>
                             <div class="exp-panel">
                                 <div class="section-title-row compact-row">
                                     <div>
                                         <h3>经验条</h3>
-                                        <span class="section-hint">
+                                        <span id="cat-exp-text" class="section-hint">
                                             {% if exp_progress.exp_to_next > 0 %}
                                             {{ exp_progress.exp }}/{{ exp_progress.exp_to_next }}
                                             {% else %}
@@ -174,21 +174,21 @@
                                         </span>
                                     </div>
                                     {% if exp_progress.exp_to_next > 0 %}
-                                    <span class="pill{% if can_feed %} active{% else %} muted{% endif %}">
+                                    <span id="cat-exp-pill" class="pill{% if can_feed %} active{% else %} muted{% endif %}">
                                         {% if can_feed %}已充满{% else %}还差 {{ exp_progress.remaining }}{% endif %}
                                     </span>
                                     {% else %}
-                                    <span class="pill active">满级完成</span>
+                                    <span id="cat-exp-pill" class="pill active">满级完成</span>
                                     {% endif %}
                                 </div>
                                 <div class="exp-bar">
-                                    <div class="exp-bar-fill" style="width: {{ exp_progress.percent }}%;"></div>
+                                    <div id="cat-exp-fill" class="exp-bar-fill" style="width: {{ exp_progress.percent }}%;"></div>
                                 </div>
-                                <p class="exp-panel-copy">{{ feed_gate_hint }}</p>
+                                <p id="cat-feed-gate-hint" class="exp-panel-copy">{{ feed_gate_hint }}</p>
                             </div>
                             <div class="owner-panel">
                                 <h3>最高级原主人</h3>
-                                <p>@{{ cat.highest_level_owner_name or current_user.username }} 把它带到了 {{ cat.highest_level_reached or exp_progress.level }} 级。后续若等级没有再突破，这个名字就不会被改写。</p>
+                                <p id="cat-owner-text">@{{ cat.highest_level_owner_name or current_user.username }} 把它带到了 {{ cat.highest_level_reached or exp_progress.level }} 级。后续若等级没有再突破，这个名字就不会被改写。</p>
                             </div>
                             <div class="skill-panel">
                                 <div class="section-title-row compact-row">
@@ -196,7 +196,7 @@
                                     <span class="section-hint">每喂一个视频学会一个技能，最多 6 个</span>
                                 </div>
                                 {% if skill_badges %}
-                                <div class="pill-row compact">
+                                <div id="cat-skill-badges" class="pill-row compact">
                                     {% for badge in skill_badges %}
                                     <span class="skill-badge {{ badge.class }}">
                                         <span class="skill-rarity">{{ badge.rarity }}</span>
@@ -205,20 +205,20 @@
                                     {% endfor %}
                                 </div>
                                 {% else %}
-                                <p>还没有学会技能，先把经验练满后喂第一个视频。</p>
+                                <p id="cat-skill-badges">还没有学会技能，先把经验练满后喂第一个视频。</p>
                                 {% endif %}
                             </div>
                             <div class="persona-info">
                                 <h3>当前性格</h3>
-                                <p>{{ cat.personality }}</p>
+                                <p id="cat-personality">{{ cat.personality }}</p>
                             </div>
                             <div class="latest-summary">
                                 <h3>成长摘要</h3>
-                                <p>{{ cat.story_summary }}</p>
+                                <p id="cat-story-summary">{{ cat.story_summary }}</p>
                             </div>
                             <div class="latest-summary">
                                 <h3>最近一次变化</h3>
-                                <p>{{ cat.latest_summary or "还没有新的成长记录。" }}</p>
+                                <p id="cat-latest-summary">{{ cat.latest_summary or "还没有新的成长记录。" }}</p>
                             </div>
                         </div>
 
@@ -239,6 +239,7 @@
                                 <span class="section-hint">在同一个输入框里聊天；如果内容里带有抖音链接，就自动按喂养处理</span>
                             </div>
                         </div>
+                        <div id="task-status-bar" class="task-status-bar hidden" aria-live="polite"></div>
 
                         <div class="chat-messages" id="chatMessages">
                             {% if not chat_history %}
@@ -269,6 +270,7 @@
                             method="POST"
                             data-chat-endpoint="/api/my-cat/chat/stream"
                             data-feed-endpoint="/api/my-cat/feed"
+                            data-refresh-endpoint="/api/my-cat/current"
                         >
                             <input type="hidden" name="cat_id" value="{{ cat.id }}">
                             <textarea
@@ -288,6 +290,7 @@
                                         class="ghost-btn compact-btn"
                                         formaction="/my-cat/train"
                                         formmethod="post"
+                                        formnovalidate
                                         name="action_key"
                                         value="{{ action.key }}"
                                         title="{{ action.description }} (经验 +{{ action.exp_gain }})"
@@ -346,14 +349,6 @@
         </section>
         {% endif %}
 
-    </div>
-
-    <div id="parse-loading" class="loading-overlay hidden" aria-hidden="true">
-        <div class="loading-card">
-            <div class="loading-spinner"></div>
-            <h3>正在喂养你的猫</h3>
-            <p>系统正在解析抖音内容并更新猫咪形象，请稍候。</p>
-        </div>
     </div>
     <script src="{{ request.url_for('static', path='app.js') }}"></script>
 {% endblock %}

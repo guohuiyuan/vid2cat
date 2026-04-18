@@ -21,10 +21,16 @@
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                     </button>
                     <div class="user-dropdown-menu">
+                        {% if header_dropdown_links %}
+                        {% for item in header_dropdown_links %}
+                        <a href="{{ item.href }}">{{ item.label }}</a>
+                        {% endfor %}
+                        {% else %}
                         {% if admin_user %}
                         <a href="/admin">后台管理</a>
                         {% endif %}
                         <a href="/logout">退出登录</a>
+                        {% endif %}
                     </div>
                 </div>
                 {% else %}
