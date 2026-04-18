@@ -91,11 +91,7 @@ class AIModelRuntime:
             response.raise_for_status()
             data = response.json()
 
-        choices = data.get("choices") or []
-        if not choices:
-            raise RuntimeError("模型未返回 choices")
-        message = choices[0].get("message") or {}
-        content = AIModelRuntime._flatten_content(message.get("content"))
+        content = AIModelRuntime._extract_text(data)
         if not content:
             raise RuntimeError("模型返回内容为空")
         return content.strip()
@@ -153,6 +149,45 @@ class AIModelRuntime:
                     chunks.append(str(item))
             return "\n".join(chunks)
         return "" if content is None else str(content)
+
+    @staticmethod
+    def _extract_text(data: dict[str, Any]) -> str:
+        choices = data.get("choices") or []
+        if choices:
+            first = choices[0] or {}
+            message = first.get("message") or {}
+            text = AIModelRuntime._flatten_content(message.get("content"))
+            if text:
+                return text
+            text = AIModelRuntime._flatten_content(first.get("text"))
+            if text:
+                return text
+            delta = first.get("delta") or {}
+            text = AIModelRuntime._flatten_content(delta.get("content"))
+            if text:
+                return text
+
+        text = AIModelRuntime._flatten_content(data.get("output_text"))
+        if text:
+            return text
+
+        outputs = data.get("output") or []
+        if isinstance(outputs, list):
+            chunks: list[str] = []
+            for item in outputs:
+                if not isinstance(item, dict):
+                    continue
+                content = item.get("content") or []
+                if isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict):
+                            text = block.get("text")
+                            if text:
+                                chunks.append(str(text))
+            if chunks:
+                return "\n".join(chunks)
+
+        raise RuntimeError("模型未返回可识别的文本字段")
 
 
 class ImageHostScaffold:

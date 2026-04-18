@@ -11,6 +11,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let activeTaskId = null;
     let typewriterTimer = null;
     let typewriterQueue = "";
+    let typewriterStreamDone = false;
 
     const setTaskStatus = (text, variant = "progress") => {
         if (!taskStatusBar) return;
@@ -89,6 +90,18 @@ document.addEventListener("DOMContentLoaded", () => {
         typewriterQueue = "";
         scrollChatToBottom();
     };
+
+    const waitForTypewriterToDrain = () =>
+        new Promise((resolve) => {
+            const poll = () => {
+                if (typewriterStreamDone && typewriterQueue === "" && typewriterTimer === null) {
+                    resolve();
+                    return;
+                }
+                window.setTimeout(poll, 16);
+            };
+            poll();
+        });
 
     const renderSkillBadges = (skillBadges) => {
         if (!Array.isArray(skillBadges) || skillBadges.length === 0) {
@@ -275,6 +288,7 @@ document.addEventListener("DOMContentLoaded", () => {
             updateInteractionUi();
             const assistantBubble = appendMessage("assistant", "");
             typewriterQueue = "";
+            typewriterStreamDone = false;
             if (typewriterTimer !== null) {
                 window.clearTimeout(typewriterTimer);
                 typewriterTimer = null;
@@ -307,18 +321,23 @@ document.addEventListener("DOMContentLoaded", () => {
                 for (const eventText of events) {
                     const line = eventText
                         .split("\n")
-                        .find((item) => item.startsWith("data: "));
+                        .find((item) => item.startsWith("data:"));
                     if (!line) continue;
-                    const payload = JSON.parse(line.slice(6));
+                    const payload = JSON.parse(line.slice(5).trim());
                     if (payload.type === "token") {
                         queueTypewriterToken(assistantBubble, payload.token);
                     } else if (payload.type === "error" && assistantBubble) {
+                        typewriterStreamDone = true;
                         finishTypewriter(assistantBubble);
                         assistantBubble.textContent = payload.message;
-                    } else if (payload.type === "done" && assistantBubble) {
-                        finishTypewriter(assistantBubble);
+                    } else if (payload.type === "done") {
+                        typewriterStreamDone = true;
                     }
                 }
+            }
+
+            if (assistantBubble && typewriterStreamDone) {
+                await waitForTypewriterToDrain();
             }
         };
 

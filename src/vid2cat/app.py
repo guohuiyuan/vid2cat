@@ -758,6 +758,8 @@ async def my_cat_chat_stream(request: Request, content: str = Form(...)):
 
     async def event_stream():
         try:
+            yield f"data: {json.dumps({'type': 'start'}, ensure_ascii=False)}\n\n"
+            await asyncio.sleep(0)
             response = await asyncio.to_thread(generate_cat_response, settings, cat, chat_history)
             assembled = ""
             for chunk in response:
@@ -771,7 +773,15 @@ async def my_cat_chat_stream(request: Request, content: str = Form(...)):
             add_cat_message(int(cat["id"]), "assistant", error_text)
             yield f"data: {json.dumps({'type': 'error', 'message': error_text}, ensure_ascii=False)}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.post("/api/my-cat/feed")
