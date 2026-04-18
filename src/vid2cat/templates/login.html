@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>注册 - vid2cat</title>
+    <title>登录 - vid2cat</title>
     <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
 </head>
 <body>
@@ -13,13 +13,8 @@
             <div class="nav-actions">
                 <a class="ghost-btn" href="/">抖音解析</a>
                 <a class="ghost-btn" href="/atlases">图鉴列表</a>
+                <a class="ghost-btn" href="/register">注册</a>
                 <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
-                {% if current_user %}
-                <span class="user-badge">已登录：{{ current_user.username }}</span>
-                <a class="ghost-btn" href="/logout">退出</a>
-                {% else %}
-                <a class="ghost-btn" href="/login">登录</a>
-                {% endif %}
             </div>
         </div>
 
@@ -32,21 +27,20 @@
 
         <section class="content-card">
             <div class="section-title-row">
-                <h1>注册账号</h1>
-                <span class="section-hint">注册后会自动登录，随后就可以在图鉴详情页评论</span>
+                <h1>登录账号</h1>
+                <span class="section-hint">登录后才能使用评论功能</span>
             </div>
-            <form class="stack-form" action="/register" method="post">
-                <input type="text" name="username" placeholder="用户名" required>
-                <input type="email" name="email" placeholder="邮箱" required>
+            <form class="stack-form" action="/login" method="post">
+                <input type="hidden" name="next" value="{{ next }}">
+                <input type="text" name="identity" placeholder="用户名或邮箱" required>
                 <input type="password" name="password" placeholder="密码" required>
-                <button class="primary-btn full-width" type="submit">立即注册</button>
+                <button class="primary-btn full-width" type="submit">立即登录</button>
             </form>
             <div class="form-footer-hint">
-                <span class="section-hint">已有账号？</span>
-                <a class="ghost-btn" href="/login">去登录</a>
+                <span class="section-hint">还没有账号？</span>
+                <a class="ghost-btn" href="/register">去注册</a>
             </div>
         </section>
-
     </div>
 </body>
 </html>

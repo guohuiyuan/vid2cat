@@ -1,20 +1,28 @@
-function prefillParse(url) {
-    const input = document.getElementById("parse-url-input");
-    if (!input) return;
-    input.value = url;
-    input.focus();
-    input.scrollIntoView({ behavior: "smooth", block: "center" });
-}
-
 document.addEventListener("DOMContentLoaded", () => {
-    const keywordInput = document.getElementById("keyword-input");
-    const parseInput = document.getElementById("parse-url-input");
-    if (!keywordInput || !parseInput) return;
+    const parseForm = document.getElementById("parse-form");
+    const parseInput = document.getElementById("parse-text-input");
+    const parseButton = document.getElementById("parse-submit-btn");
+    const loadingOverlay = document.getElementById("parse-loading");
 
-    keywordInput.addEventListener("blur", () => {
-        const value = keywordInput.value.trim();
-        if (value.includes("douyin.com")) {
-            parseInput.value = value;
+    if (parseForm && parseInput && parseButton && loadingOverlay) {
+        parseForm.addEventListener("submit", () => {
+            const value = parseInput.value.trim();
+            if (!value) return;
+            parseButton.disabled = true;
+            parseButton.textContent = "解析中...";
+            loadingOverlay.classList.remove("hidden");
+            loadingOverlay.setAttribute("aria-hidden", "false");
+        });
+    }
+
+    window.addEventListener("pageshow", () => {
+        if (parseButton) {
+            parseButton.disabled = false;
+            parseButton.textContent = "开始解析生成图鉴";
+        }
+        if (loadingOverlay) {
+            loadingOverlay.classList.add("hidden");
+            loadingOverlay.setAttribute("aria-hidden", "true");
         }
     });
 });

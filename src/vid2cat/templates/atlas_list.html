@@ -12,10 +12,16 @@
         <div class="top-nav plain-nav">
             <a class="brand" href="/">vid2cat</a>
             <div class="nav-actions">
-                <a class="ghost-btn" href="/">抖音搜索</a>
+                <a class="ghost-btn" href="/">抖音解析</a>
                 <a class="ghost-btn active-tab" href="/atlases">图鉴列表</a>
-                <a class="ghost-btn" href="/register">注册</a>
                 <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+                {% if current_user %}
+                <span class="user-badge">已登录：{{ current_user.username }}</span>
+                <a class="ghost-btn" href="/logout">退出</a>
+                {% else %}
+                <a class="ghost-btn" href="/login">登录</a>
+                <a class="ghost-btn" href="/register">注册</a>
+                {% endif %}
             </div>
         </div>
 

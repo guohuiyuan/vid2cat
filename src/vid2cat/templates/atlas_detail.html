@@ -12,9 +12,16 @@
         <div class="top-nav plain-nav">
             <a class="brand" href="/">vid2cat</a>
             <div class="nav-actions">
-                <a class="ghost-btn" href="/">抖音搜索</a>
+                <a class="ghost-btn" href="/">抖音解析</a>
                 <a class="ghost-btn active-tab" href="/atlases">图鉴列表</a>
                 <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+                {% if current_user %}
+                <span class="user-badge">已登录：{{ current_user.username }}</span>
+                <a class="ghost-btn" href="/logout">退出</a>
+                {% else %}
+                <a class="ghost-btn" href="/login?next=/atlas/{{ atlas.id }}">登录</a>
+                <a class="ghost-btn" href="/register">注册</a>
+                {% endif %}
                 <a class="ghost-btn" href="/atlases">返回图鉴列表</a>
             </div>
         </div>
@@ -68,6 +75,24 @@
                     <div class="score-card">
                         <span>共鸣</span>
                         <strong>{{ model1_analysis.resonance_score }}</strong>
+                    </div>
+                </div>
+
+                <div class="info-panel">
+                    <h3>四维分析 4 角图</h3>
+                    <div class="radar-chart-card">
+                        <svg viewBox="0 0 {{ ai_radar_chart.size }} {{ ai_radar_chart.size }}" class="radar-chart" role="img" aria-label="视频四维评分图">
+                            {% for polygon in ai_radar_chart.grid_polygons %}
+                            <polygon points="{{ polygon }}" class="radar-grid"></polygon>
+                            {% endfor %}
+                            {% for axis in ai_radar_chart.axis_lines %}
+                            <line x1="{{ axis.x1 }}" y1="{{ axis.y1 }}" x2="{{ axis.x2 }}" y2="{{ axis.y2 }}" class="radar-axis"></line>
+                            {% endfor %}
+                            <polygon points="{{ ai_radar_chart.polygon }}" class="radar-value radar-value-ai"></polygon>
+                            {% for label in ai_radar_chart.labels %}
+                            <text x="{{ label.x }}" y="{{ label.y }}" class="radar-label">{{ label.label }}</text>
+                            {% endfor %}
+                        </svg>
                     </div>
                 </div>
 
@@ -178,11 +203,98 @@
         <section class="content-card">
             <div class="section-title-row">
                 <h2>评论区</h2>
-                <span class="section-hint">先完成基础互动，后续再加审核与评分</span>
+                <span class="section-hint">登录后才能评分和评论</span>
             </div>
+            <div class="info-panel">
+                <h3>用户评分</h3>
+                {% if rating_summary.rating_count %}
+                <p>当前共有 {{ rating_summary.rating_count }} 人评分，以下为四维平均分。</p>
+                <div class="score-grid">
+                    <div class="score-card">
+                        <span>快乐</span>
+                        <strong>{{ rating_summary.avg_happiness_score }}</strong>
+                    </div>
+                    <div class="score-card">
+                        <span>知识</span>
+                        <strong>{{ rating_summary.avg_knowledge_score }}</strong>
+                    </div>
+                    <div class="score-card">
+                        <span>节奏</span>
+                        <strong>{{ rating_summary.avg_rhythm_score }}</strong>
+                    </div>
+                    <div class="score-card">
+                        <span>共鸣</span>
+                        <strong>{{ rating_summary.avg_resonance_score }}</strong>
+                    </div>
+                </div>
+                <div class="radar-chart-card">
+                    <svg viewBox="0 0 {{ rating_radar_chart.size }} {{ rating_radar_chart.size }}" class="radar-chart" role="img" aria-label="用户四维评分图">
+                        {% for polygon in rating_radar_chart.grid_polygons %}
+                        <polygon points="{{ polygon }}" class="radar-grid"></polygon>
+                        {% endfor %}
+                        {% for axis in rating_radar_chart.axis_lines %}
+                        <line x1="{{ axis.x1 }}" y1="{{ axis.y1 }}" x2="{{ axis.x2 }}" y2="{{ axis.y2 }}" class="radar-axis"></line>
+                        {% endfor %}
+                        <polygon points="{{ rating_radar_chart.polygon }}" class="radar-value radar-value-user"></polygon>
+                        {% for label in rating_radar_chart.labels %}
+                        <text x="{{ label.x }}" y="{{ label.y }}" class="radar-label">{{ label.label }}</text>
+                        {% endfor %}
+                    </svg>
+                </div>
+                {% else %}
+                <p>还没有用户评分，登录后可以做第一位评分者。</p>
+                {% endif %}
+
+                {% if current_user %}
+                <form class="stack-form rating-form" action="/atlas/{{ atlas.id }}/rating" method="post">
+                    <div class="rating-grid">
+                        <label>
+                            <span>快乐</span>
+                            <select name="happiness_score">
+                                {% for value in range(1, 11) %}
+                                <option value="{{ value }}" {% if user_rating and user_rating.happiness_score == value %}selected{% endif %}>{{ value }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            <span>知识</span>
+                            <select name="knowledge_score">
+                                {% for value in range(1, 11) %}
+                                <option value="{{ value }}" {% if user_rating and user_rating.knowledge_score == value %}selected{% endif %}>{{ value }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            <span>节奏</span>
+                            <select name="rhythm_score">
+                                {% for value in range(1, 11) %}
+                                <option value="{{ value }}" {% if user_rating and user_rating.rhythm_score == value %}selected{% endif %}>{{ value }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                        <label>
+                            <span>共鸣</span>
+                            <select name="resonance_score">
+                                {% for value in range(1, 11) %}
+                                <option value="{{ value }}" {% if user_rating and user_rating.resonance_score == value %}selected{% endif %}>{{ value }}</option>
+                                {% endfor %}
+                            </select>
+                        </label>
+                    </div>
+                    <div class="action-row">
+                        <button class="accent-btn" type="submit">{{ "更新评分" if user_rating else "提交评分" }}</button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="action-row login-required-actions">
+                    <a class="primary-btn anchor-btn" href="/login?next=/atlas/{{ atlas.id }}">登录后评分</a>
+                </div>
+                {% endif %}
+            </div>
+            {% if current_user %}
             <form class="comment-form" action="/atlas/{{ atlas.id }}/comment" method="post">
                 <div class="two-col-inputs">
-                    <input type="text" name="username" placeholder="你的昵称" required>
+                    <input type="text" value="{{ current_user.username }}" disabled>
                     <input type="text" value="{{ atlas.title }}" disabled>
                 </div>
                 <textarea name="content" rows="4" placeholder="说说你对这个猫咪图鉴/视频选题的看法" required></textarea>
@@ -190,6 +302,15 @@
                     <button class="accent-btn" type="submit">发布评论</button>
                 </div>
             </form>
+            {% else %}
+            <div class="empty-state">
+                评论功能需要先登录账号。
+                <div class="action-row login-required-actions">
+                    <a class="primary-btn anchor-btn" href="/login?next=/atlas/{{ atlas.id }}">去登录</a>
+                    <a class="ghost-btn" href="/register">去注册</a>
+                </div>
+            </div>
+            {% endif %}
 
             {% if comments %}
             <div class="comment-list">

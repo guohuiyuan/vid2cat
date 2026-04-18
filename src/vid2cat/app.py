@@ -17,9 +17,12 @@ from .db import (
     DEFAULT_SETTINGS,
     add_comment,
     authenticate_admin,
+    authenticate_user,
     get_atlas,
+    get_rating_summary,
     get_settings,
     get_user_by_id,
+    get_user_rating,
     init_db,
     list_atlases,
     list_comments,
@@ -28,10 +31,11 @@ from .db import (
     save_atlas,
     update_settings,
     update_user_password,
+    upsert_rating,
     verify_password,
 )
 from .integrations import ImageHostScaffold
-from .services import build_search_candidates, is_douyin_url, parse_cat_profile, parse_douyin_to_atlas, parse_model1_analysis
+from .services import extract_first_url, is_douyin_url, parse_cat_profile, parse_douyin_to_atlas, parse_model1_analysis
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -65,6 +69,56 @@ def build_atlas_card(atlas: dict) -> dict:
         "rarity": profile.get("rarity") or "待定",
         "summary": summary,
         "title": atlas.get("title") or "",
+    }
+
+
+def build_radar_chart(
+    scores: list[tuple[str, float]],
+    max_score: float,
+    size: int = 260,
+    radius: int = 92,
+) -> dict:
+    center = size / 2
+    axes = [
+        ("快乐", (0, -1)),
+        ("知识", (1, 0)),
+        ("节奏", (0, 1)),
+        ("共鸣", (-1, 0)),
+    ]
+
+    def point(vector_x: float, vector_y: float, value: float, scale: float = 1.0) -> tuple[float, float]:
+        factor = 0 if max_score == 0 else (value / max_score) * scale
+        return center + vector_x * radius * factor, center + vector_y * radius * factor
+
+    grid_polygons = []
+    for scale in [0.25, 0.5, 0.75, 1.0]:
+        polygon = []
+        for _, (vx, vy) in axes:
+            x, y = point(vx, vy, max_score, scale=scale)
+            polygon.append(f"{x:.1f},{y:.1f}")
+        grid_polygons.append(" ".join(polygon))
+
+    value_map = {label: float(value or 0) for label, value in scores}
+    polygon = []
+    labels = []
+    for label, (vx, vy) in axes:
+        x, y = point(vx, vy, value_map.get(label, 0))
+        polygon.append(f"{x:.1f},{y:.1f}")
+        lx, ly = point(vx, vy, max_score, scale=1.18)
+        labels.append({"label": label, "x": round(lx, 1), "y": round(ly, 1)})
+
+    axis_lines = []
+    for _, (vx, vy) in axes:
+        x, y = point(vx, vy, max_score)
+        axis_lines.append({"x1": center, "y1": center, "x2": round(x, 1), "y2": round(y, 1)})
+
+    return {
+        "size": size,
+        "center": center,
+        "grid_polygons": grid_polygons,
+        "polygon": " ".join(polygon),
+        "axis_lines": axis_lines,
+        "labels": labels,
     }
 
 app = FastAPI(title="vid2cat", version="0.1.0")
@@ -102,7 +156,18 @@ def get_current_admin(request: Request) -> dict | None:
         return None
     user = get_user_by_id(int(admin_user_id))
     if not user or user.get("role") != "admin":
-        request.session.clear()
+        request.session.pop("admin_user_id", None)
+        return None
+    return user
+
+
+def get_current_user(request: Request) -> dict | None:
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return None
+    user = get_user_by_id(int(user_id))
+    if not user or user.get("role") != "user":
+        request.session.pop("user_id", None)
         return None
     return user
 
@@ -119,34 +184,34 @@ def require_admin(request: Request, allow_password_change: bool = False) -> tupl
 @app.get("/")
 def home(
     request: Request,
-    q: str = Query(default=""),
+    text: str = Query(default=""),
     message: str = Query(default=""),
     error: str = Query(default=""),
 ):
     settings = get_settings()
-    search_results = build_search_candidates(q)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
         context={
             "request": request,
-            "query": q,
+            "text": text,
             "message": message,
             "error": error,
-            "search_results": search_results,
-            "is_url_query": is_douyin_url(q),
+            "extracted_url": extract_first_url(text or ""),
             "admin_user": get_current_admin(request),
+            "current_user": get_current_user(request),
             "image_host_status": ImageHostScaffold.describe(settings),
         },
     )
 
 
 @app.post("/parse")
-def parse_url(url: str = Form(...)):
-    if not is_douyin_url(url):
+def parse_url(raw_input: str = Form(...)):
+    parsed_url = extract_first_url(raw_input) or raw_input.strip()
+    if not is_douyin_url(parsed_url):
         return redirect_with_message("/", error="请输入抖音作品链接")
     settings = get_settings()
-    atlas = parse_douyin_to_atlas(url, settings=settings)
+    atlas = parse_douyin_to_atlas(parsed_url, settings=settings)
     atlas_id = save_atlas(atlas)
     message = "已完成基础解析并生成图鉴骨架"
     if atlas.get("parse_error"):
@@ -174,6 +239,7 @@ def atlas_list_page(
             "error": error,
             "atlas_cards": atlases,
             "admin_user": get_current_admin(request),
+            "current_user": get_current_user(request),
         },
     )
 
@@ -192,12 +258,14 @@ def register_page(
             "message": message,
             "error": error,
             "admin_user": get_current_admin(request),
+            "current_user": get_current_user(request),
         },
     )
 
 
 @app.post("/register")
 def register_submit(
+    request: Request,
     username: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
@@ -206,8 +274,52 @@ def register_submit(
         return redirect_with_message("/register", error="请完整填写注册信息")
     ok, msg = register_user(username, email, password)
     if ok:
-        return redirect_with_message("/register", message=msg)
+        user = authenticate_user(username, password)
+        if user:
+            request.session["user_id"] = int(user["id"])
+        return redirect_with_message("/atlases", message="注册成功，已自动登录")
     return redirect_with_message("/register", error=msg)
+
+
+@app.get("/login")
+def login_page(
+    request: Request,
+    message: str = Query(default=""),
+    error: str = Query(default=""),
+    next: str = Query(default="/atlases"),
+):
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={
+            "request": request,
+            "message": message,
+            "error": error,
+            "next": next,
+            "admin_user": get_current_admin(request),
+            "current_user": get_current_user(request),
+        },
+    )
+
+
+@app.post("/login")
+def login_submit(
+    request: Request,
+    identity: str = Form(...),
+    password: str = Form(...),
+    next: str = Form("/atlases"),
+):
+    user = authenticate_user(identity, password)
+    if not user:
+        return redirect_with_message("/login", error="用户名/邮箱或密码错误", extra={"next": next})
+    request.session["user_id"] = int(user["id"])
+    return redirect_with_message(next or "/atlases", message=f"欢迎回来，{user['username']}")
+
+
+@app.get("/logout")
+def logout(request: Request):
+    request.session.pop("user_id", None)
+    return redirect_with_message("/", message="已退出登录")
 
 
 @app.get("/atlas/{atlas_id}")
@@ -223,6 +335,27 @@ def atlas_detail(
     settings = get_settings()
     cat_profile = parse_cat_profile(atlas.get("cat_profile_json") or "")
     model1_analysis = parse_model1_analysis(atlas.get("model1_output") or "")
+    current_user = get_current_user(request)
+    user_rating = get_user_rating(atlas_id, int(current_user["id"])) if current_user else None
+    rating_summary = get_rating_summary(atlas_id)
+    ai_radar_chart = build_radar_chart(
+        [
+            ("快乐", model1_analysis.get("happiness_score", 0)),
+            ("知识", model1_analysis.get("knowledge_score", 0)),
+            ("节奏", model1_analysis.get("rhythm_score", 0)),
+            ("共鸣", model1_analysis.get("resonance_score", 0)),
+        ],
+        max_score=100,
+    )
+    rating_radar_chart = build_radar_chart(
+        [
+            ("快乐", rating_summary.get("avg_happiness_score", 0)),
+            ("知识", rating_summary.get("avg_knowledge_score", 0)),
+            ("节奏", rating_summary.get("avg_rhythm_score", 0)),
+            ("共鸣", rating_summary.get("avg_resonance_score", 0)),
+        ],
+        max_score=10,
+    )
     ordered_profile_items = [
         {"key": key, "label": CAT_PROFILE_LABELS.get(key, key), "value": cat_profile[key]}
         for key in CAT_PROFILE_LABELS
@@ -245,25 +378,62 @@ def atlas_detail(
             "message": message,
             "error": error,
             "admin_user": get_current_admin(request),
+            "current_user": current_user,
             "cat_display_name": cat_profile.get("name") or cat_profile.get("breed") or atlas.get("title"),
             "model1_analysis": model1_analysis,
+            "user_rating": user_rating,
+            "rating_summary": rating_summary,
+            "ai_radar_chart": ai_radar_chart,
+            "rating_radar_chart": rating_radar_chart,
         },
     )
 
 
 @app.post("/atlas/{atlas_id}/comment")
 def comment_submit(
+    request: Request,
     atlas_id: int,
-    username: str = Form(...),
     content: str = Form(...),
 ):
     atlas = get_atlas(atlas_id)
     if not atlas:
         raise HTTPException(status_code=404, detail="图鉴不存在")
-    if not username.strip() or not content.strip():
-        return redirect_with_message(f"/atlas/{atlas_id}", error="请填写昵称和评论内容")
-    add_comment(atlas_id, username, content)
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login", error="评论前请先登录", extra={"next": f"/atlas/{atlas_id}"})
+    if not content.strip():
+        return redirect_with_message(f"/atlas/{atlas_id}", error="请填写评论内容")
+    add_comment(atlas_id, current_user["username"], content)
     return redirect_with_message(f"/atlas/{atlas_id}", message="评论已发布")
+
+
+@app.post("/atlas/{atlas_id}/rating")
+def rating_submit(
+    request: Request,
+    atlas_id: int,
+    happiness_score: int = Form(...),
+    knowledge_score: int = Form(...),
+    rhythm_score: int = Form(...),
+    resonance_score: int = Form(...),
+):
+    atlas = get_atlas(atlas_id)
+    if not atlas:
+        raise HTTPException(status_code=404, detail="图鉴不存在")
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login", error="评分前请先登录", extra={"next": f"/atlas/{atlas_id}"})
+    values = [happiness_score, knowledge_score, rhythm_score, resonance_score]
+    if any(score < 1 or score > 10 for score in values):
+        return redirect_with_message(f"/atlas/{atlas_id}", error="评分必须在 1 到 10 之间")
+    upsert_rating(
+        atlas_id=atlas_id,
+        user_id=int(current_user["id"]),
+        happiness_score=happiness_score,
+        knowledge_score=knowledge_score,
+        rhythm_score=rhythm_score,
+        resonance_score=resonance_score,
+    )
+    return redirect_with_message(f"/atlas/{atlas_id}", message="评分已保存")
 
 
 @app.get("/admin/login")
