@@ -6,6 +6,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const interactionHint = document.getElementById("interaction-hint");
     const chatMessages = document.getElementById("chatMessages");
     const starRatings = document.querySelectorAll("[data-star-rating]");
+    const shareCardButtons = document.querySelectorAll("[data-share-card-id]");
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
 
     let activeTaskId = null;
@@ -32,6 +33,82 @@ document.addEventListener("DOMContentLoaded", () => {
     };
 
     scrollChatToBottom();
+
+    const showShareNotice = (text) => {
+        window.alert(text);
+    };
+
+    const copyToClipboard = async (text) => {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return true;
+        }
+        const helper = document.createElement("textarea");
+        helper.value = text;
+        helper.setAttribute("readonly", "");
+        helper.style.position = "absolute";
+        helper.style.left = "-9999px";
+        document.body.appendChild(helper);
+        helper.select();
+        const copied = document.execCommand("copy");
+        document.body.removeChild(helper);
+        return copied;
+    };
+
+    const buildShareFallbackMessage = (payload) => [
+        "分享卡图床链接已生成。",
+        `链接：${payload.uploaded_url}`,
+        "已为你复制到剪贴板。",
+        "如果要发微信，直接把这个链接粘贴到聊天窗口即可。",
+        "如果要发 QQ，可继续打开 QQ 空间或微博分享页。",
+    ].join("\n");
+
+    const shareUploadedCard = async (button) => {
+        const catId = button.dataset.shareCardId;
+        const catName = button.dataset.shareCardName || "这只小猫";
+        const originalText = button.textContent;
+        button.disabled = true;
+        button.textContent = "生成分享链接中...";
+        try {
+            const response = await fetch(`/api/cats/${catId}/share-card/link`, { method: "POST" });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.detail || "生成分享链接失败");
+            }
+
+            const copied = await copyToClipboard(payload.uploaded_url);
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: payload.share_title || `${catName} 的分享卡`,
+                        text: payload.share_text || `来看看 ${catName} 的分享卡`,
+                        url: payload.uploaded_url,
+                    });
+                    showShareNotice(`分享卡链接已生成${copied ? "并复制到剪贴板" : ""}，可直接发到微信、QQ等主流 App。`);
+                    return;
+                } catch (error) {
+                    // User cancelled the native share sheet or the browser rejected the call.
+                }
+            }
+
+            const openQzone = window.confirm(
+                `${buildShareFallbackMessage(payload)}\n\n点击“确定”打开 QQ 空间分享页，点击“取消”保持当前页面。`,
+            );
+            if (openQzone && payload.qzone_url) {
+                window.open(payload.qzone_url, "_blank", "noopener,noreferrer");
+            } else if (!openQzone && payload.weibo_url) {
+                const openWeibo = window.confirm("要不要改为打开微博分享页？");
+                if (openWeibo) {
+                    window.open(payload.weibo_url, "_blank", "noopener,noreferrer");
+                }
+            }
+        } catch (error) {
+            showShareNotice(error.message || "分享分享卡失败");
+        } finally {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+    };
 
     const appendMessage = (role, content) => {
         if (!chatMessages) return null;
@@ -464,6 +541,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 event.preventDefault();
                 paint(currentValue + 1);
             }
+        });
+    });
+
+    shareCardButtons.forEach((button) => {
+        button.addEventListener("click", async () => {
+            await shareUploadedCard(button);
         });
     });
 

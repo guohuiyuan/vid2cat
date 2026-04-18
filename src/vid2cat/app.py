@@ -6,7 +6,7 @@ from pathlib import Path
 import time
 import tempfile
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 from uuid import uuid4
 
 import uvicorn
@@ -320,6 +320,14 @@ def build_share_card_payload(cat: dict[str, Any]) -> dict[str, Any]:
         "learned_skills": parse_skill_list(str(cat.get("learned_skills_json") or "")),
         "rarity": str(persona.get("rarity") or ""),
     }
+
+
+def ensure_share_card_access(cat: dict[str, Any], current_user: dict[str, Any] | None) -> tuple[bool, str]:
+    is_owner = current_user and int(cat.get("user_id") or 0) == int(current_user["id"])
+    is_public = bool(int(cat.get("is_public") or 0) or int(cat.get("available_for_adoption") or 0))
+    if is_owner or is_public:
+        return True, ""
+    return False, "这张分享卡暂时不可访问"
 
 
 def get_feed_gate_status(cat: dict[str, Any] | None) -> tuple[bool, str]:
@@ -871,10 +879,9 @@ def cat_share_card(request: Request, cat_id: int, download: bool = Query(default
     if not cat:
         raise HTTPException(status_code=404, detail="猫咪不存在")
 
-    is_owner = current_user and int(cat.get("user_id") or 0) == int(current_user["id"])
-    is_public = bool(int(cat.get("is_public") or 0) or int(cat.get("available_for_adoption") or 0))
-    if not is_owner and not is_public:
-        raise HTTPException(status_code=403, detail="这张分享卡暂时不可访问")
+    allowed, error_message = ensure_share_card_access(cat, current_user)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_message)
 
     owner_name = ""
     if current_user and int(cat.get("user_id") or 0) == int(current_user["id"]):
@@ -896,6 +903,50 @@ def cat_share_card(request: Request, cat_id: int, download: bool = Query(default
             "Content-Disposition": f'{disposition}; filename="cat-{cat_id}-share-card.png"',
             "Cache-Control": "no-cache",
         },
+    )
+
+
+@app.post("/api/cats/{cat_id}/share-card/link")
+def cat_share_card_link(request: Request, cat_id: int):
+    current_user = get_current_user(request)
+    settings = get_settings()
+    cat = get_cat_by_id(cat_id)
+    if not cat:
+        raise HTTPException(status_code=404, detail="猫咪不存在")
+
+    allowed, error_message = ensure_share_card_access(cat, current_user)
+    if not allowed:
+        raise HTTPException(status_code=403, detail=error_message)
+    if not settings.get("gitee_token"):
+        raise HTTPException(status_code=400, detail="请先在管理员后台配置图床 Token，再生成分享链接")
+
+    owner_name = ""
+    if current_user and int(cat.get("user_id") or 0) == int(current_user["id"]):
+        owner_name = str(current_user.get("username") or "")
+    elif cat.get("highest_level_owner_name"):
+        owner_name = str(cat.get("highest_level_owner_name") or "")
+
+    site_url = str(settings.get("public_site_url") or "").strip() or "https://vid2cat.zeabur.app/"
+    image_bytes = render_cat_share_card(
+        build_share_card_payload(cat),
+        owner_name=owner_name,
+        site_url=site_url,
+    )
+    uploaded_url = ImageHostScaffold.upload_bytes(image_bytes, ".png", settings)
+    share_title = f"{cat.get('name') or 'vid2cat猫咪'} 的分享卡"
+    share_text = f"来看看 {cat.get('name') or '这只小猫'} 在 vid2cat 的成长分享卡"
+    query = urlencode({"url": uploaded_url, "title": share_title, "summary": share_text})
+    qq_query = urlencode({"url": uploaded_url, "title": share_title, "desc": share_text, "summary": share_text})
+    return JSONResponse(
+        {
+            "uploaded_url": uploaded_url,
+            "share_title": share_title,
+            "share_text": share_text,
+            "qzone_url": f"https://sns.qzone.qq.com/cgi-bin/qzshare/cgi_qzshare_onekey?{query}",
+            "qq_url": f"https://connect.qq.com/widget/shareqq/index.html?{qq_query}",
+            "weibo_url": f"https://service.weibo.com/share/share.php?{query}",
+            "wechat_tip": "已生成分享卡链接，可复制后发送到微信或在移动端使用系统分享。",
+        }
     )
 
 
