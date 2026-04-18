@@ -101,6 +101,7 @@ def init_db() -> None:
                 tags TEXT,
                 status TEXT NOT NULL DEFAULT 'draft',
                 hot_score INTEGER NOT NULL DEFAULT 72,
+                happiness_score INTEGER NOT NULL DEFAULT 70,
                 rhythm_score INTEGER NOT NULL DEFAULT 70,
                 knowledge_score INTEGER NOT NULL DEFAULT 68,
                 resonance_score INTEGER NOT NULL DEFAULT 75,
@@ -137,6 +138,7 @@ def init_db() -> None:
         )
         ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
         ensure_column(conn, "users", "must_change_password", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "atlases", "happiness_score", "INTEGER NOT NULL DEFAULT 70")
         ensure_column(conn, "atlases", "model1_output", "TEXT")
         ensure_column(conn, "atlases", "model2_output", "TEXT")
         ensure_column(conn, "atlases", "model3_output", "TEXT")
@@ -196,6 +198,7 @@ def seed_demo_data() -> None:
             "tags": "猫咪,踩点,样例",
             "status": "demo",
             "hot_score": 88,
+            "happiness_score": 90,
             "rhythm_score": 92,
             "knowledge_score": 64,
             "resonance_score": 86,
@@ -224,6 +227,7 @@ def seed_demo_data() -> None:
             "tags": "知识,布偶,样例",
             "status": "demo",
             "hot_score": 81,
+            "happiness_score": 72,
             "rhythm_score": 73,
             "knowledge_score": 91,
             "resonance_score": 78,
@@ -251,13 +255,13 @@ def seed_demo_data() -> None:
                 """
                 INSERT INTO atlases (
                     title, source_url, canonical_url, aweme_id, author_name, cover_url, video_url,
-                    duration_seconds, description, tags, status, hot_score, rhythm_score,
+                    duration_seconds, description, tags, status, hot_score, happiness_score, rhythm_score,
                     knowledge_score, resonance_score, ai_summary, optimization_tips, model1_output, model2_output, model3_output,
                     cat_profile_json, prompt_scaffold, cat_image_url, cat_image_prompt, image_host_status, parse_error,
                     created_at, updated_at, author_avatar
                 ) VALUES (
                     :title, :source_url, :canonical_url, :aweme_id, :author_name, :cover_url, :video_url,
-                    :duration_seconds, :description, :tags, :status, :hot_score, :rhythm_score,
+                    :duration_seconds, :description, :tags, :status, :hot_score, :happiness_score, :rhythm_score,
                     :knowledge_score, :resonance_score, :ai_summary, :optimization_tips, :model1_output, :model2_output, :model3_output,
                     :cat_profile_json, :prompt_scaffold, :cat_image_url, :cat_image_prompt, :image_host_status, :parse_error,
                     :created_at, :updated_at, ''
@@ -295,6 +299,7 @@ def save_atlas(atlas: dict[str, Any]) -> int:
         "tags": normalize_tags(atlas.get("tags")),
         "status": atlas.get("status", "draft"),
         "hot_score": int(atlas.get("hot_score") or 72),
+        "happiness_score": int(atlas.get("happiness_score") or 70),
         "rhythm_score": int(atlas.get("rhythm_score") or 70),
         "knowledge_score": int(atlas.get("knowledge_score") or 68),
         "resonance_score": int(atlas.get("resonance_score") or 75),
@@ -335,6 +340,7 @@ def save_atlas(atlas: dict[str, Any]) -> int:
                     tags = :tags,
                     status = :status,
                     hot_score = :hot_score,
+                    happiness_score = :happiness_score,
                     rhythm_score = :rhythm_score,
                     knowledge_score = :knowledge_score,
                     resonance_score = :resonance_score,
@@ -360,12 +366,12 @@ def save_atlas(atlas: dict[str, Any]) -> int:
             """
             INSERT INTO atlases (
                 title, source_url, canonical_url, aweme_id, author_name, author_avatar, cover_url,
-                video_url, duration_seconds, description, tags, status, hot_score, rhythm_score,
+                video_url, duration_seconds, description, tags, status, hot_score, happiness_score, rhythm_score,
                 knowledge_score, resonance_score, ai_summary, optimization_tips, model1_output, model2_output, model3_output,
                 cat_profile_json, prompt_scaffold, cat_image_url, cat_image_prompt, image_host_status, parse_error, created_at, updated_at
             ) VALUES (
                 :title, :source_url, :canonical_url, :aweme_id, :author_name, :author_avatar, :cover_url,
-                :video_url, :duration_seconds, :description, :tags, :status, :hot_score, :rhythm_score,
+                :video_url, :duration_seconds, :description, :tags, :status, :hot_score, :happiness_score, :rhythm_score,
                 :knowledge_score, :resonance_score, :ai_summary, :optimization_tips, :model1_output, :model2_output, :model3_output,
                 :cat_profile_json, :prompt_scaffold, :cat_image_url, :cat_image_prompt, :image_host_status, :parse_error, :created_at, :updated_at
             )
@@ -382,10 +388,10 @@ def list_atlases(keyword: str = "", limit: int = 12) -> list[dict[str, Any]]:
     params: list[Any] = []
     if keyword.strip():
         query += """
-            WHERE title LIKE ? OR author_name LIKE ? OR tags LIKE ? OR source_url LIKE ?
+            WHERE title LIKE ? OR author_name LIKE ? OR tags LIKE ? OR source_url LIKE ? OR cat_profile_json LIKE ?
         """
         fuzzy = f"%{keyword.strip()}%"
-        params.extend([fuzzy, fuzzy, fuzzy, fuzzy])
+        params.extend([fuzzy, fuzzy, fuzzy, fuzzy, fuzzy])
     query += " ORDER BY updated_at DESC LIMIT ?"
     params.append(limit)
 

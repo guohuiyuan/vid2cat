@@ -11,8 +11,9 @@
         <div class="top-nav plain-nav">
             <a class="brand" href="/">vid2cat</a>
             <div class="nav-actions">
+                <a class="ghost-btn" href="/">抖音搜索</a>
+                <a class="ghost-btn" href="/atlases">图鉴列表</a>
                 <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
-                <a class="ghost-btn" href="/">返回首页</a>
             </div>
         </div>
 
@@ -36,27 +37,6 @@
             </form>
         </section>
 
-        <section class="content-card">
-            <div class="section-title-row">
-                <h2>最近注册用户</h2>
-                <span class="section-hint">只做列表展示，便于验证用户链路已经打通</span>
-            </div>
-            {% if users %}
-            <div class="user-list">
-                {% for user in users %}
-                <div class="user-item">
-                    <div>
-                        <strong>{{ user.username }}</strong>
-                        <p>{{ user.email }}</p>
-                    </div>
-                    <span>{{ user.created_at[:10] }}</span>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="empty-state compact">暂无注册用户。</div>
-            {% endif %}
-        </section>
     </div>
 </body>
 </html>

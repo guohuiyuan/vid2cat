@@ -31,13 +31,14 @@ from .db import (
     verify_password,
 )
 from .integrations import ImageHostScaffold
-from .services import build_search_candidates, enrich_local_results, is_douyin_url, parse_cat_profile, parse_douyin_to_atlas, score_overview
+from .services import build_search_candidates, is_douyin_url, parse_cat_profile, parse_douyin_to_atlas
 
 
 BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parents[1]
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 CAT_PROFILE_LABELS = {
+    "name": "猫咪名字",
     "breed": "猫咪品种",
     "skill": "技能设定",
     "power": "种族值",
@@ -47,6 +48,23 @@ CAT_PROFILE_LABELS = {
     "rarity": "稀有度",
     "image_prompt": "绘图提示词",
 }
+
+
+def build_atlas_card(atlas: dict) -> dict:
+    profile = parse_cat_profile(atlas.get("cat_profile_json") or "")
+    cat_name = profile.get("name") or profile.get("breed") or atlas.get("title") or "未命名猫咪"
+    breed = profile.get("breed") or "待补全品种"
+    image_url = atlas.get("cat_image_url") or atlas.get("cover_url") or ""
+    summary = profile.get("personality") or atlas.get("ai_summary") or atlas.get("description") or "暂无介绍"
+    return {
+        "id": atlas.get("id"),
+        "cat_name": cat_name,
+        "breed": breed,
+        "image_url": image_url,
+        "rarity": profile.get("rarity") or "待定",
+        "summary": summary,
+        "title": atlas.get("title") or "",
+    }
 
 app = FastAPI(title="vid2cat", version="0.1.0")
 app.add_middleware(SessionMiddleware, secret_key="vid2cat-admin-session-secret")
@@ -104,10 +122,8 @@ def home(
     message: str = Query(default=""),
     error: str = Query(default=""),
 ):
-    local_rows = list_atlases(q, limit=24 if q.strip() else 9)
-    local_results = enrich_local_results(local_rows if q.strip() else [])
-    search_results = local_results + build_search_candidates(q)
     settings = get_settings()
+    search_results = build_search_candidates(q)
     return templates.TemplateResponse(
         request=request,
         name="index.html",
@@ -117,8 +133,6 @@ def home(
             "message": message,
             "error": error,
             "search_results": search_results,
-            "recent_atlases": list_atlases(limit=9),
-            "recent_users": list_recent_users(limit=6),
             "is_url_query": is_douyin_url(q),
             "admin_user": get_current_admin(request),
             "image_host_status": ImageHostScaffold.describe(settings),
@@ -141,6 +155,28 @@ def parse_url(url: str = Form(...)):
     return redirect_with_message(f"/atlas/{atlas_id}", message=message)
 
 
+@app.get("/atlases")
+def atlas_list_page(
+    request: Request,
+    q: str = Query(default=""),
+    message: str = Query(default=""),
+    error: str = Query(default=""),
+):
+    atlases = [build_atlas_card(row) for row in list_atlases(q, limit=36)]
+    return templates.TemplateResponse(
+        request=request,
+        name="atlas_list.html",
+        context={
+            "request": request,
+            "query": q,
+            "message": message,
+            "error": error,
+            "atlas_cards": atlases,
+            "admin_user": get_current_admin(request),
+        },
+    )
+
+
 @app.get("/register")
 def register_page(
     request: Request,
@@ -154,7 +190,6 @@ def register_page(
             "request": request,
             "message": message,
             "error": error,
-            "users": list_recent_users(limit=12),
             "admin_user": get_current_admin(request),
         },
     )
@@ -202,14 +237,13 @@ def atlas_detail(
         context={
             "request": request,
             "atlas": atlas,
-            "scores": score_overview(atlas),
             "cat_profile": cat_profile,
             "profile_items": ordered_profile_items,
             "comments": list_comments(atlas_id),
             "message": message,
             "error": error,
             "admin_user": get_current_admin(request),
-            "runtime_image_host_status": ImageHostScaffold.describe(settings),
+            "cat_display_name": cat_profile.get("name") or cat_profile.get("breed") or atlas.get("title"),
         },
     )
 
@@ -326,6 +360,18 @@ def admin_dashboard(
     if redirect:
         return redirect
     settings = get_settings()
+    prompt_examples = []
+    for row in list_atlases(limit=6):
+        profile = parse_cat_profile(row.get("cat_profile_json") or "")
+        prompt_examples.append(
+            {
+                "id": row.get("id"),
+                "title": row.get("title") or "未命名图鉴",
+                "cat_name": profile.get("name") or profile.get("breed") or "未命名猫咪",
+                "prompt_scaffold": row.get("prompt_scaffold") or "",
+                "image_prompt": row.get("cat_image_prompt") or profile.get("image_prompt") or "",
+            }
+        )
     return templates.TemplateResponse(
         request=request,
         name="admin_dashboard.html",
@@ -337,6 +383,8 @@ def admin_dashboard(
             "settings": settings,
             "uploaded_url": uploaded_url,
             "image_host_status": ImageHostScaffold.describe(settings),
+            "recent_users": list_recent_users(limit=12),
+            "prompt_examples": prompt_examples,
         },
     )
 

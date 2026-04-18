@@ -13,6 +13,8 @@
             <div class="top-nav">
                 <a class="brand" href="/">vid2cat</a>
                 <div class="nav-actions">
+                    <a class="ghost-btn active-tab" href="/">抖音搜索</a>
+                    <a class="ghost-btn" href="/atlases">图鉴列表</a>
                     <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
                     <a class="ghost-btn" href="/register">注册</a>
                 </div>
@@ -38,8 +40,8 @@
                         <strong>{{ image_host_status }}</strong>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-label">AI 提示词</span>
-                        <strong>输出基础 Prompt Scaffold</strong>
+                        <span class="feature-label">图鉴入口</span>
+                        <strong>图鉴列表与抖音搜索已拆分为两个界面</strong>
                     </div>
                     <div class="feature-item">
                         <span class="feature-label">抖音能力</span>
@@ -139,57 +141,14 @@
         </section>
         {% endif %}
 
-        <section class="dashboard-grid">
-            <div class="content-card">
-                <div class="section-title-row">
-                    <h2>最近图鉴</h2>
-                    <span class="section-hint">支持后续继续扩展为排行榜和收藏页</span>
-                </div>
-                <div class="atlas-grid">
-                    {% for atlas in recent_atlases %}
-                    <a class="atlas-card" href="/atlas/{{ atlas.id }}">
-                        <div class="atlas-cover {% if not atlas.cover_url %}placeholder-cover{% endif %}">
-                            {% if atlas.cover_url %}
-                            <img src="{{ atlas.cover_url }}" alt="{{ atlas.title }}">
-                            {% else %}
-                            <span>{{ atlas.title[:2] }}</span>
-                            {% endif %}
-                        </div>
-                        <div class="atlas-body">
-                            <span class="tag">{{ atlas.status }}</span>
-                            <h3>{{ atlas.title }}</h3>
-                            <p>{{ atlas.ai_summary or atlas.description or "暂无摘要" }}</p>
-                            <div class="atlas-meta">
-                                <span>作者：{{ atlas.author_name or "未知作者" }}</span>
-                                <span>ID：{{ atlas.aweme_id or "待补全" }}</span>
-                            </div>
-                        </div>
-                    </a>
-                    {% endfor %}
-                </div>
+        <section class="content-card">
+            <div class="section-title-row">
+                <h2>界面切换</h2>
+                <span class="section-hint">搜索页只做抖音搜索和解析，图鉴内容统一在图鉴列表页查看</span>
             </div>
-
-            <aside class="content-card side-card">
-                <div class="section-title-row">
-                    <h2>最近注册</h2>
-                    <span class="section-hint">先完成注册雏形，不做登录态</span>
-                </div>
-                {% if recent_users %}
-                <div class="user-list">
-                    {% for user in recent_users %}
-                    <div class="user-item">
-                        <div>
-                            <strong>{{ user.username }}</strong>
-                            <p>{{ user.email }}</p>
-                        </div>
-                        <span>{{ user.created_at[:10] }}</span>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="empty-state compact">还没有用户，先去注册一个体验评论功能。</div>
-                {% endif %}
-            </aside>
+            <div class="action-row">
+                <a class="primary-btn anchor-btn" href="/atlases">进入图鉴列表</a>
+            </div>
         </section>
     </div>
 

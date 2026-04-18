@@ -300,6 +300,12 @@ button:hover,
     border: 1px solid var(--border);
 }
 
+.ghost-btn.active-tab {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--primary-dark);
+    border-color: rgba(16, 185, 129, 0.24);
+}
+
 .full-width {
     width: 100%;
 }
@@ -461,6 +467,12 @@ button:hover,
     flex-wrap: wrap;
 }
 
+.atlas-subtitle {
+    font-weight: 700;
+    color: #344054;
+    margin-bottom: 8px;
+}
+
 .side-card {
     align-self: start;
 }
@@ -546,6 +558,23 @@ button:hover,
 
 .info-panel + .info-panel {
     margin-top: 14px;
+}
+
+.compact-hero {
+    margin-bottom: 20px;
+}
+
+.atlas-gallery-card .atlas-cover {
+    height: 240px;
+}
+
+.prompt-example-list {
+    display: grid;
+    gap: 14px;
+}
+
+.prompt-gap {
+    margin-top: 16px;
 }
 
 .info-panel input + input,
