@@ -181,12 +181,12 @@ def init_db() -> None:
                 exp INTEGER NOT NULL DEFAULT 0,
                 exp_to_next INTEGER NOT NULL DEFAULT 100,
                 learned_skills_json TEXT NOT NULL DEFAULT '[]',
-                wisdom INTEGER NOT NULL DEFAULT 10,
-                grit INTEGER NOT NULL DEFAULT 10,
-                creativity INTEGER NOT NULL DEFAULT 10,
-                agility INTEGER NOT NULL DEFAULT 10,
-                cooperation INTEGER NOT NULL DEFAULT 10,
-                overall_power INTEGER NOT NULL DEFAULT 50,
+                wisdom INTEGER NOT NULL DEFAULT 50,
+                grit INTEGER NOT NULL DEFAULT 50,
+                creativity INTEGER NOT NULL DEFAULT 50,
+                agility INTEGER NOT NULL DEFAULT 50,
+                cooperation INTEGER NOT NULL DEFAULT 50,
+                overall_power INTEGER NOT NULL DEFAULT 250,
                 image_url TEXT NOT NULL DEFAULT '',
                 personality TEXT NOT NULL DEFAULT '',
                 story_summary TEXT NOT NULL DEFAULT '',
@@ -391,12 +391,12 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
             exp INTEGER NOT NULL DEFAULT 0,
             exp_to_next INTEGER NOT NULL DEFAULT 100,
             learned_skills_json TEXT NOT NULL DEFAULT '[]',
-            wisdom INTEGER NOT NULL DEFAULT 10,
-            grit INTEGER NOT NULL DEFAULT 10,
-            creativity INTEGER NOT NULL DEFAULT 10,
-            agility INTEGER NOT NULL DEFAULT 10,
-            cooperation INTEGER NOT NULL DEFAULT 10,
-            overall_power INTEGER NOT NULL DEFAULT 50,
+            wisdom INTEGER NOT NULL DEFAULT 50,
+            grit INTEGER NOT NULL DEFAULT 50,
+            creativity INTEGER NOT NULL DEFAULT 50,
+            agility INTEGER NOT NULL DEFAULT 50,
+            cooperation INTEGER NOT NULL DEFAULT 50,
+            overall_power INTEGER NOT NULL DEFAULT 250,
             image_url TEXT NOT NULL DEFAULT '',
             personality TEXT NOT NULL DEFAULT '',
             story_summary TEXT NOT NULL DEFAULT '',
@@ -442,8 +442,8 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
                 WHEN TRIM(COALESCE(learned_skills_json, '')) = '' THEN '[]'
                 ELSE learned_skills_json
             END,
-            COALESCE(wisdom, 10), COALESCE(grit, 10), COALESCE(creativity, 10),
-            COALESCE(agility, 10), COALESCE(cooperation, 10),
+            COALESCE(wisdom, 50), COALESCE(grit, 50), COALESCE(creativity, 50),
+            COALESCE(agility, 50), COALESCE(cooperation, 50),
             COALESCE(wisdom, 0) + COALESCE(grit, 0) + COALESCE(creativity, 0)
                 + COALESCE(agility, 0) + COALESCE(cooperation, 0),
             COALESCE(image_url, ''), COALESCE(personality, ''), COALESCE(story_summary, ''),
@@ -864,7 +864,7 @@ def compute_overall_power(
 def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, Any] | None = None) -> dict[str, Any]:
     now = utcnow()
     base_name = (username.strip() or "新手")[:8]
-    wisdom = grit = creativity = agility = cooperation = 10
+    wisdom = grit = creativity = agility = cooperation = 50
     profile = ai_data.get("profile") if ai_data else {}
     return {
         "user_id": user_id,

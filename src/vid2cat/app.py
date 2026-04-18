@@ -140,7 +140,7 @@ def build_cat_card(cat: dict) -> dict:
         "exp": exp,
         "exp_to_next": exp_to_next,
         "exp_percent": exp_percent,
-        "overall_power": cat.get("overall_power") or 50,
+        "overall_power": cat.get("overall_power") or 250,
         "summary": cat.get("personality") or cat.get("story_summary") or "暂无介绍",
         "learned_skills": parse_skill_list(str(cat.get("learned_skills_json") or "")),
         "highest_level_owner_name": cat.get("highest_level_owner_name") or cat.get("username") or "未知主人",

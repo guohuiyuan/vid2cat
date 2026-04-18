@@ -796,11 +796,11 @@ def generate_final_cat_persona(
     )
     user_prompt = (
         f"这只猫咪的 5 维属性如下：\n"
-        f"智慧: {stats.get('wisdom', 10)}\n"
-        f"毅力: {stats.get('grit', 10)}\n"
-        f"创造: {stats.get('creativity', 10)}\n"
-        f"灵敏: {stats.get('agility', 10)}\n"
-        f"协作: {stats.get('cooperation', 10)}\n\n"
+        f"智慧: {stats.get('wisdom', 50)}\n"
+        f"毅力: {stats.get('grit', 50)}\n"
+        f"创造: {stats.get('creativity', 50)}\n"
+        f"灵敏: {stats.get('agility', 50)}\n"
+        f"协作: {stats.get('cooperation', 50)}\n\n"
         f"这只猫咪喂养过程中吸收的内容总结如下：\n"
         + "\n".join([f"{i+1}. {s}" for i, s in enumerate(summaries)])
         + "\n\n请返回 JSON，字段必须包含："
