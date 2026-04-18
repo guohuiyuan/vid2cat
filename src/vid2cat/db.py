@@ -549,10 +549,25 @@ def list_comments(atlas_id: int) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
             """
-            SELECT id, atlas_id, username, content, created_at
+            SELECT
+                comments.id,
+                comments.atlas_id,
+                comments.username,
+                comments.content,
+                comments.created_at,
+                ratings.happiness_score,
+                ratings.knowledge_score,
+                ratings.rhythm_score,
+                ratings.resonance_score
             FROM comments
-            WHERE atlas_id = ?
-            ORDER BY created_at DESC
+            LEFT JOIN users
+                ON users.username = comments.username
+                AND users.role = 'user'
+            LEFT JOIN ratings
+                ON ratings.atlas_id = comments.atlas_id
+                AND ratings.user_id = users.id
+            WHERE comments.atlas_id = ?
+            ORDER BY comments.created_at DESC
             """,
             (atlas_id,),
         ).fetchall()

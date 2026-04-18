@@ -685,6 +685,61 @@ button:hover,
     font-size: 14px;
 }
 
+.star-rating {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: #f8fafc;
+}
+
+.star-rating-track {
+    display: grid;
+    grid-template-columns: repeat(10, minmax(0, 1fr));
+    gap: 4px;
+    cursor: ew-resize;
+    user-select: none;
+    touch-action: none;
+    outline: none;
+}
+
+.star-rating-track:focus {
+    box-shadow: 0 0 0 4px rgba(16, 185, 129, 0.12);
+    border-radius: 12px;
+}
+
+.star-rating-star {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #d0d5dd;
+    font-size: 24px;
+    line-height: 1;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+
+.star-rating-star.active {
+    color: #f59e0b;
+}
+
+.star-rating-track:hover .star-rating-star.active {
+    transform: translateY(-1px);
+}
+
+.star-rating-value {
+    color: #344054;
+    font-size: 14px;
+}
+
+.comment-rating-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
 .loading-overlay {
     position: fixed;
     inset: 0;

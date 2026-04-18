@@ -79,7 +79,7 @@
                 </div>
 
                 <div class="info-panel">
-                    <h3>四维分析 4 角图</h3>
+                    <h3>AI 四维分析 4 角图</h3>
                     <div class="radar-chart-card">
                         <svg viewBox="0 0 {{ ai_radar_chart.size }} {{ ai_radar_chart.size }}" class="radar-chart" role="img" aria-label="视频四维评分图">
                             {% for polygon in ai_radar_chart.grid_polygons %}
@@ -206,9 +206,10 @@
                 <span class="section-hint">登录后才能评分和评论</span>
             </div>
             <div class="info-panel">
-                <h3>用户评分</h3>
+                <h3>用户星级评分</h3>
+                <p>这里只统计真实用户提交的评分，不包含上方 AI 分析分。</p>
                 {% if rating_summary.rating_count %}
-                <p>当前共有 {{ rating_summary.rating_count }} 人评分，以下为四维平均分。</p>
+                <p>当前共有 {{ rating_summary.rating_count }} 位用户评分，以下为四维平均分。</p>
                 <div class="score-grid">
                     <div class="score-card">
                         <span>快乐</span>
@@ -248,37 +249,117 @@
                 {% if current_user %}
                 <form class="stack-form rating-form" action="/atlas/{{ atlas.id }}/rating" method="post">
                     <div class="rating-grid">
+                        {% set happiness_value = user_rating.happiness_score if user_rating else 5 %}
                         <label>
                             <span>快乐</span>
-                            <select name="happiness_score">
-                                {% for value in range(1, 11) %}
-                                <option value="{{ value }}" {% if user_rating and user_rating.happiness_score == value %}selected{% endif %}>{{ value }}</option>
-                                {% endfor %}
-                            </select>
+                            <div
+                                class="star-rating"
+                                data-star-rating
+                                data-field-label="快乐"
+                                data-value="{{ happiness_value }}"
+                            >
+                                <input id="rating-happiness" type="hidden" name="happiness_score" value="{{ happiness_value }}">
+                                <div
+                                    class="star-rating-track"
+                                    data-star-track
+                                    data-target="rating-happiness"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="快乐评分"
+                                    aria-valuemin="1"
+                                    aria-valuemax="10"
+                                    aria-valuenow="{{ happiness_value }}"
+                                >
+                                    {% for value in range(1, 11) %}
+                                    <span class="star-rating-star{% if value <= happiness_value %} active{% endif %}" data-star-value="{{ value }}">★</span>
+                                    {% endfor %}
+                                </div>
+                                <strong class="star-rating-value" data-star-value-text>{{ happiness_value }}/10</strong>
+                            </div>
                         </label>
+                        {% set knowledge_value = user_rating.knowledge_score if user_rating else 5 %}
                         <label>
                             <span>知识</span>
-                            <select name="knowledge_score">
-                                {% for value in range(1, 11) %}
-                                <option value="{{ value }}" {% if user_rating and user_rating.knowledge_score == value %}selected{% endif %}>{{ value }}</option>
-                                {% endfor %}
-                            </select>
+                            <div
+                                class="star-rating"
+                                data-star-rating
+                                data-field-label="知识"
+                                data-value="{{ knowledge_value }}"
+                            >
+                                <input id="rating-knowledge" type="hidden" name="knowledge_score" value="{{ knowledge_value }}">
+                                <div
+                                    class="star-rating-track"
+                                    data-star-track
+                                    data-target="rating-knowledge"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="知识评分"
+                                    aria-valuemin="1"
+                                    aria-valuemax="10"
+                                    aria-valuenow="{{ knowledge_value }}"
+                                >
+                                    {% for value in range(1, 11) %}
+                                    <span class="star-rating-star{% if value <= knowledge_value %} active{% endif %}" data-star-value="{{ value }}">★</span>
+                                    {% endfor %}
+                                </div>
+                                <strong class="star-rating-value" data-star-value-text>{{ knowledge_value }}/10</strong>
+                            </div>
                         </label>
+                        {% set rhythm_value = user_rating.rhythm_score if user_rating else 5 %}
                         <label>
                             <span>节奏</span>
-                            <select name="rhythm_score">
-                                {% for value in range(1, 11) %}
-                                <option value="{{ value }}" {% if user_rating and user_rating.rhythm_score == value %}selected{% endif %}>{{ value }}</option>
-                                {% endfor %}
-                            </select>
+                            <div
+                                class="star-rating"
+                                data-star-rating
+                                data-field-label="节奏"
+                                data-value="{{ rhythm_value }}"
+                            >
+                                <input id="rating-rhythm" type="hidden" name="rhythm_score" value="{{ rhythm_value }}">
+                                <div
+                                    class="star-rating-track"
+                                    data-star-track
+                                    data-target="rating-rhythm"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="节奏评分"
+                                    aria-valuemin="1"
+                                    aria-valuemax="10"
+                                    aria-valuenow="{{ rhythm_value }}"
+                                >
+                                    {% for value in range(1, 11) %}
+                                    <span class="star-rating-star{% if value <= rhythm_value %} active{% endif %}" data-star-value="{{ value }}">★</span>
+                                    {% endfor %}
+                                </div>
+                                <strong class="star-rating-value" data-star-value-text>{{ rhythm_value }}/10</strong>
+                            </div>
                         </label>
+                        {% set resonance_value = user_rating.resonance_score if user_rating else 5 %}
                         <label>
                             <span>共鸣</span>
-                            <select name="resonance_score">
-                                {% for value in range(1, 11) %}
-                                <option value="{{ value }}" {% if user_rating and user_rating.resonance_score == value %}selected{% endif %}>{{ value }}</option>
-                                {% endfor %}
-                            </select>
+                            <div
+                                class="star-rating"
+                                data-star-rating
+                                data-field-label="共鸣"
+                                data-value="{{ resonance_value }}"
+                            >
+                                <input id="rating-resonance" type="hidden" name="resonance_score" value="{{ resonance_value }}">
+                                <div
+                                    class="star-rating-track"
+                                    data-star-track
+                                    data-target="rating-resonance"
+                                    role="slider"
+                                    tabindex="0"
+                                    aria-label="共鸣评分"
+                                    aria-valuemin="1"
+                                    aria-valuemax="10"
+                                    aria-valuenow="{{ resonance_value }}"
+                                >
+                                    {% for value in range(1, 11) %}
+                                    <span class="star-rating-star{% if value <= resonance_value %} active{% endif %}" data-star-value="{{ value }}">★</span>
+                                    {% endfor %}
+                                </div>
+                                <strong class="star-rating-value" data-star-value-text>{{ resonance_value }}/10</strong>
+                            </div>
                         </label>
                     </div>
                     <div class="action-row">
@@ -320,6 +401,14 @@
                         <strong>{{ comment.username }}</strong>
                         <span>{{ comment.created_at.replace('T', ' ')[:19] }}</span>
                     </div>
+                    {% if comment.happiness_score %}
+                    <div class="comment-rating-row">
+                        <span class="pill muted">快乐 {{ comment.happiness_score }}/10</span>
+                        <span class="pill muted">知识 {{ comment.knowledge_score }}/10</span>
+                        <span class="pill muted">节奏 {{ comment.rhythm_score }}/10</span>
+                        <span class="pill muted">共鸣 {{ comment.resonance_score }}/10</span>
+                    </div>
+                    {% endif %}
                     <p>{{ comment.content }}</p>
                 </article>
                 {% endfor %}
@@ -329,5 +418,6 @@
             {% endif %}
         </section>
     </div>
+    <script src="{{ request.url_for('static', path='app.js') }}"></script>
 </body>
 </html>
