@@ -170,6 +170,8 @@ def init_db() -> None:
                 latest_summary TEXT NOT NULL DEFAULT '',
                 is_active INTEGER NOT NULL DEFAULT 1,
                 is_public INTEGER NOT NULL DEFAULT 0,
+                available_for_adoption INTEGER NOT NULL DEFAULT 0,
+                released_at TEXT NOT NULL DEFAULT '',
                 final_persona_json TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -218,19 +220,25 @@ def init_db() -> None:
         ensure_column(conn, "ratings", "total_score", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(conn, "cats", "is_active", "INTEGER NOT NULL DEFAULT 1")
         ensure_column(conn, "cats", "is_public", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cats", "available_for_adoption", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "cats", "released_at", "TEXT NOT NULL DEFAULT ''")
         ensure_column(conn, "cats", "final_persona_json", "TEXT NOT NULL DEFAULT ''")
 
         # 迁移：移除 cats 表 user_id 的 UNIQUE 约束 (SQLite 需要通过重建表实现)
         rows = conn.execute("PRAGMA table_info(cats)").fetchall()
         if rows:
-            # 检查是否有 UNIQUE 索引
             indexes = conn.execute("PRAGMA index_list(cats)").fetchall()
             has_unique_userid = any(idx["unique"] == 1 and "user_id" in [info["name"] for info in conn.execute(f"PRAGMA index_info({idx['name']})").fetchall()] for idx in indexes)
-            
-            # 如果 user_id 还是唯一的，或者我们需要更新 max_feed_count 默认值
-            # 简单起见，如果发现 max_feed_count 默认值不是 10，我们就触发一次迁移
-            # 或者我们直接尝试修改 max_feed_count 的现有数据
-            conn.execute("UPDATE cats SET max_feed_count = 10 WHERE max_feed_count = 5")
+            if has_unique_userid:
+                rebuild_cats_table_without_user_unique(conn)
+            conn.execute("UPDATE cats SET max_feed_count = 5 WHERE max_feed_count != 5")
+            conn.execute(
+                """
+                UPDATE cats
+                SET overall_power = COALESCE(wisdom, 0) + COALESCE(grit, 0) + COALESCE(creativity, 0)
+                    + COALESCE(agility, 0) + COALESCE(cooperation, 0)
+                """
+            )
         conn.execute(
             """
             UPDATE ratings
@@ -256,6 +264,65 @@ def init_db() -> None:
         bootstrap_settings(conn)
         bootstrap_admin(conn)
     seed_demo_data()
+
+
+def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
+    conn.execute("DROP TABLE IF EXISTS cats_new")
+    conn.execute(
+        """
+        CREATE TABLE cats_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            cat_no TEXT NOT NULL UNIQUE,
+            name TEXT NOT NULL,
+            stage TEXT NOT NULL DEFAULT '初始态',
+            feed_count INTEGER NOT NULL DEFAULT 0,
+            max_feed_count INTEGER NOT NULL DEFAULT 5,
+            wisdom INTEGER NOT NULL DEFAULT 10,
+            grit INTEGER NOT NULL DEFAULT 10,
+            creativity INTEGER NOT NULL DEFAULT 10,
+            agility INTEGER NOT NULL DEFAULT 10,
+            cooperation INTEGER NOT NULL DEFAULT 10,
+            overall_power INTEGER NOT NULL DEFAULT 50,
+            image_url TEXT NOT NULL DEFAULT '',
+            personality TEXT NOT NULL DEFAULT '',
+            story_summary TEXT NOT NULL DEFAULT '',
+            latest_summary TEXT NOT NULL DEFAULT '',
+            is_active INTEGER NOT NULL DEFAULT 1,
+            is_public INTEGER NOT NULL DEFAULT 0,
+            available_for_adoption INTEGER NOT NULL DEFAULT 0,
+            released_at TEXT NOT NULL DEFAULT '',
+            final_persona_json TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO cats_new (
+            id, user_id, cat_no, name, stage, feed_count, max_feed_count,
+            wisdom, grit, creativity, agility, cooperation, overall_power,
+            image_url, personality, story_summary, latest_summary,
+            is_active, is_public, available_for_adoption, released_at, final_persona_json,
+            created_at, updated_at
+        )
+        SELECT
+            id, user_id, cat_no, name, stage, feed_count, 5,
+            COALESCE(wisdom, 10), COALESCE(grit, 10), COALESCE(creativity, 10),
+            COALESCE(agility, 10), COALESCE(cooperation, 10),
+            COALESCE(wisdom, 0) + COALESCE(grit, 0) + COALESCE(creativity, 0)
+                + COALESCE(agility, 0) + COALESCE(cooperation, 0),
+            COALESCE(image_url, ''), COALESCE(personality, ''), COALESCE(story_summary, ''),
+            COALESCE(latest_summary, ''), COALESCE(is_active, 1), COALESCE(is_public, 0),
+            COALESCE(available_for_adoption, 0), COALESCE(released_at, ''), COALESCE(final_persona_json, ''),
+            created_at, updated_at
+        FROM cats
+        """
+    )
+    conn.execute("DROP TABLE cats")
+    conn.execute("ALTER TABLE cats_new RENAME TO cats")
 
 
 def bootstrap_settings(conn: sqlite3.Connection) -> None:
@@ -556,7 +623,7 @@ def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, An
         "name": profile.get("name") or f"{base_name}的小猫",
         "stage": "初始态",
         "feed_count": 0,
-        "max_feed_count": 10,
+        "max_feed_count": 5,
         "wisdom": wisdom,
         "grit": grit,
         "creativity": creativity,
@@ -568,6 +635,9 @@ def build_initial_cat_payload(user_id: int, username: str, ai_data: dict[str, An
         "story_summary": profile.get("story") or "这是一只刚刚被领取的动漫猫，世界观和能力都还在成长中。",
         "latest_summary": "还没有喂过抖音链接，先试着喂第一条吧。",
         "is_active": 1,
+        "is_public": 0,
+        "available_for_adoption": 0,
+        "released_at": "",
         "created_at": now,
         "updated_at": now,
     }
@@ -581,16 +651,52 @@ def create_initial_cat_for_user(user_id: int, username: str, ai_data: dict[str, 
             INSERT INTO cats (
                 user_id, cat_no, name, stage, feed_count, max_feed_count,
                 wisdom, grit, creativity, agility, cooperation, overall_power,
-                image_url, personality, story_summary, latest_summary, is_active, created_at, updated_at
+                image_url, personality, story_summary, latest_summary, is_active, is_public,
+                available_for_adoption, released_at, created_at, updated_at
             ) VALUES (
                 :user_id, :cat_no, :name, :stage, :feed_count, :max_feed_count,
                 :wisdom, :grit, :creativity, :agility, :cooperation, :overall_power,
-                :image_url, :personality, :story_summary, :latest_summary, :is_active, :created_at, :updated_at
+                :image_url, :personality, :story_summary, :latest_summary, :is_active, :is_public,
+                :available_for_adoption, :released_at, :created_at, :updated_at
             )
             """,
             payload,
         )
     return get_user_cat(user_id) or payload
+
+
+def count_user_owned_cats(user_id: int) -> int:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM cats
+            WHERE user_id = ? AND available_for_adoption = 0
+            """,
+            (user_id,),
+        ).fetchone()
+    return int((row["total"] if row else 0) or 0)
+
+
+def list_user_cats(user_id: int, limit: int = 10) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM cats
+            WHERE user_id = ? AND available_for_adoption = 0
+            ORDER BY is_active DESC, updated_at DESC
+            LIMIT ?
+            """,
+            (user_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def get_cat_by_id(cat_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        row = conn.execute("SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def get_user_cat(user_id: int) -> dict[str, Any] | None:
@@ -599,7 +705,7 @@ def get_user_cat(user_id: int) -> dict[str, Any] | None:
             """
             SELECT *
             FROM cats
-            WHERE user_id = ? AND is_active = 1
+            WHERE user_id = ? AND is_active = 1 AND available_for_adoption = 0
             LIMIT 1
             """,
             (user_id,),
@@ -607,18 +713,52 @@ def get_user_cat(user_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
+def get_or_activate_user_cat(user_id: int) -> dict[str, Any] | None:
+    cat = get_user_cat(user_id)
+    if cat:
+        return cat
+    owned_cats = list_user_cats(user_id, limit=1)
+    if not owned_cats:
+        return None
+    return activate_cat_for_user(user_id, int(owned_cats[0]["id"])) or owned_cats[0]
+
+
 def set_all_user_cats_inactive(user_id: int) -> None:
     with get_connection() as conn:
         conn.execute(
-            "UPDATE cats SET is_active = 0, updated_at = ? WHERE user_id = ?",
+            "UPDATE cats SET is_active = 0, updated_at = ? WHERE user_id = ? AND available_for_adoption = 0",
             (utcnow(), user_id),
         )
+
+
+def activate_cat_for_user(user_id: int, cat_id: int) -> dict[str, Any] | None:
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE cats SET is_active = 0, updated_at = ? WHERE user_id = ? AND available_for_adoption = 0",
+            (utcnow(), user_id),
+        )
+        conn.execute(
+            """
+            UPDATE cats
+            SET is_active = 1, updated_at = ?
+            WHERE id = ? AND user_id = ? AND available_for_adoption = 0
+            """,
+            (utcnow(), cat_id, user_id),
+        )
+    return get_cat_by_id(cat_id)
 
 
 def ensure_user_cat(user_id: int, username: str, settings: dict[str, str] | None = None) -> dict[str, Any]:
     cat = get_user_cat(user_id)
     if cat:
         return cat
+
+    owned_cats = list_user_cats(user_id, limit=1)
+    if owned_cats:
+        return activate_cat_for_user(user_id, int(owned_cats[0]["id"])) or owned_cats[0]
+
+    if count_user_owned_cats(user_id) >= 3:
+        raise ValueError("每位用户最多只能拥有 3 只猫")
 
     ai_data = None
     if settings:
@@ -675,8 +815,6 @@ def add_cat_feed_record(cat_id: int, feed_result: dict[str, Any]) -> dict[str, A
         stage = "成长中"
         if next_feed_count >= max_feeds:
             stage = "已满级"
-        elif next_feed_count == 5:
-            stage = "进化中"
 
         conn.execute(
             """
@@ -934,13 +1072,78 @@ def list_public_cats(limit: int = 12) -> list[dict[str, Any]]:
             SELECT cats.*, users.username
             FROM cats
             JOIN users ON users.id = cats.user_id
-            WHERE is_public = 1
-            ORDER BY cats.updated_at DESC
+            WHERE is_public = 1 OR available_for_adoption = 1
+            ORDER BY available_for_adoption DESC, cats.updated_at DESC
             LIMIT ?
             """,
             (limit,),
         ).fetchall()
     return [dict(row) for row in rows]
+
+
+def release_cat_to_plaza(cat_id: int, user_id: int) -> bool:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT id
+            FROM cats
+            WHERE id = ? AND user_id = ? AND available_for_adoption = 0
+            LIMIT 1
+            """,
+            (cat_id, user_id),
+        ).fetchone()
+        if not row:
+            return False
+        conn.execute(
+            """
+            UPDATE cats
+            SET is_active = 0,
+                is_public = 1,
+                available_for_adoption = 1,
+                released_at = ?,
+                stage = '待领养',
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (utcnow(), utcnow(), cat_id),
+        )
+    return True
+
+
+def adopt_plaza_cat(cat_id: int, new_user_id: int) -> dict[str, Any] | None:
+    if count_user_owned_cats(new_user_id) >= 3:
+        raise ValueError("每位用户最多只能拥有 3 只猫")
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT *
+            FROM cats
+            WHERE id = ? AND available_for_adoption = 1
+            LIMIT 1
+            """,
+            (cat_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("这只猫当前不可领养")
+        conn.execute(
+            "UPDATE cats SET is_active = 0, updated_at = ? WHERE user_id = ? AND available_for_adoption = 0",
+            (utcnow(), new_user_id),
+        )
+        conn.execute(
+            """
+            UPDATE cats
+            SET user_id = ?,
+                is_active = 1,
+                is_public = 0,
+                available_for_adoption = 0,
+                released_at = '',
+                stage = CASE WHEN feed_count >= max_feed_count THEN '已满级' ELSE '成长中' END,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (new_user_id, utcnow(), cat_id),
+        )
+    return get_cat_by_id(cat_id)
 
 
 def add_cat_message(cat_id: int, role: str, content: str) -> None:

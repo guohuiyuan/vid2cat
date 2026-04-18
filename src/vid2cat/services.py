@@ -663,17 +663,38 @@ def build_feed_deltas(title: str, analysis: dict[str, Any], tags: list[str]) -> 
     }
 
 
+def build_initial_adoption_prompt(username: str, breed: str, color: str) -> str:
+    selected_breed = breed.strip() or "动漫猫"
+    selected_color = color.strip() or "奶油白"
+    return (
+        f"一只{selected_color}的{selected_breed}，动漫插画风格，"
+        f"适合名字叫“{username}的小猫”的初始领养形象。"
+        "大眼睛，柔软毛发，半身或全身立绘，表情亲人，"
+        "画面干净，适合宠物养成卡片展示，高质量数字插画。"
+    )
+
+
 def generate_initial_cat_ai_data(
     settings: dict[str, str],
     username: str,
+    breed: str = "",
+    color: str = "",
+    image_url: str = "",
 ) -> dict[str, Any]:
+    selected_breed = breed.strip() or "初始动漫猫"
+    selected_color = color.strip() or "奶油白"
+    preferred_image_url = image_url.strip()
+    default_prompt = build_initial_adoption_prompt(username, selected_breed, selected_color)
     config2 = build_model_config(settings, 2)
     system_prompt2 = (
         "你是猫咪图鉴设定师。请为一个新领养的动漫猫生成初始人设。"
         "只返回 JSON，不要输出额外说明。"
     )
     user_prompt2 = (
-        f"主人名字是 {username}。请生成猫咪的初始设定。\n"
+        f"主人名字是 {username}。\n"
+        f"用户选择的品种是：{selected_breed}。\n"
+        f"用户选择的毛色是：{selected_color}。\n"
+        "如果没有额外图片参考，需要围绕这两个选项给出稳定、可直接生图的形象描述。\n"
         "请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
@@ -681,27 +702,30 @@ def generate_initial_cat_ai_data(
     data2 = json_repair.loads(raw2)
     profile = {
         "name": str(data2.get("name") or f"{username}的小猫"),
-        "breed": str(data2.get("breed") or "初始动漫猫"),
+        "breed": str(data2.get("breed") or selected_breed),
         "skill": str(data2.get("skill") or "卖萌"),
         "power": str(data2.get("power") or "50"),
         "personality": str(data2.get("personality") or "活泼可爱，充满好奇心。"),
-        "story": str(data2.get("story") or f"这是 {username} 领养的第一只动漫猫。"),
-        "appearance": str(data2.get("appearance") or "可爱的二次元小猫，大眼睛，毛茸茸。"),
+        "story": str(data2.get("story") or f"这是 {username} 领养的第一只{selected_color}{selected_breed}。"),
+        "appearance": str(
+            data2.get("appearance") or f"一只{selected_color}的{selected_breed}，可爱的二次元小猫，大眼睛，毛茸茸。"
+        ),
         "rarity": str(data2.get("rarity") or "N"),
-        "image_prompt": str(data2.get("image_prompt") or "A cute anime cat, high quality, digital art style."),
+        "image_prompt": str(data2.get("image_prompt") or default_prompt),
     }
 
-    # 调用模型3生成初始图片
-    image_url = ""
-    try:
-        image_result = generate_cat_image_with_model3(settings, profile["name"], profile["story"], profile)
-        image_url = image_result["url"]
-    except Exception:
-        pass
+    final_image_url = preferred_image_url
+    if not final_image_url:
+        try:
+            image_result = generate_cat_image_with_model3(settings, profile["name"], profile["story"], profile)
+            final_image_url = image_result["url"]
+            profile["image_prompt"] = image_result.get("prompt") or profile["image_prompt"]
+        except Exception:
+            pass
 
     return {
         "profile": profile,
-        "image_url": image_url,
+        "image_url": final_image_url,
     }
 
 

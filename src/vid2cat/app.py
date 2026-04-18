@@ -21,12 +21,17 @@ from .db import (
     DEFAULT_ADMIN_USERNAME,
     DEFAULT_SETTINGS,
     add_comment,
+    adopt_plaza_cat,
     add_cat_feed_record,
     add_cat_message,
+    activate_cat_for_user,
     authenticate_admin,
     authenticate_user,
-    ensure_user_cat,
+    count_user_owned_cats,
+    create_initial_cat_for_user,
     get_atlas,
+    get_cat_by_id,
+    get_or_activate_user_cat,
     get_user_cat,
     get_rating_summary,
     get_settings,
@@ -39,6 +44,8 @@ from .db import (
     list_atlases,
     list_comments,
     list_recent_users,
+    list_user_cats,
+    release_cat_to_plaza,
     register_user,
     save_atlas,
     set_all_user_cats_inactive,
@@ -55,6 +62,7 @@ from .services import (
     generate_cat_response,
     generate_cat_image_with_model3,
     generate_final_cat_persona,
+    generate_initial_cat_ai_data,
     is_douyin_url,
     parse_cat_profile,
     parse_douyin_to_atlas,
@@ -85,6 +93,8 @@ CAT_STAT_LABELS = {
     "agility": "灵敏",
     "cooperation": "协作",
 }
+INITIAL_CAT_BREEDS = ["布偶猫", "橘猫", "英短", "缅因猫", "奶牛猫", "森林猫"]
+INITIAL_CAT_COLORS = ["奶油白", "橘金色", "雾霾灰", "黑白双色", "琥珀棕", "樱花粉"]
 
 
 def build_atlas_card(atlas: dict) -> dict:
@@ -117,6 +127,8 @@ def build_cat_card(cat: dict) -> dict:
         "max_feed_count": cat.get("max_feed_count") or 5,
         "overall_power": cat.get("overall_power") or 50,
         "summary": cat.get("personality") or cat.get("story_summary") or "暂无介绍",
+        "available_for_adoption": int(cat.get("available_for_adoption") or 0),
+        "is_active": int(cat.get("is_active") or 0),
     }
 
 
@@ -210,14 +222,21 @@ def build_feed_record_cards(records: list[dict[str, Any]]) -> list[dict[str, Any
 
 def build_cat_stage_hint(cat: dict[str, Any]) -> str:
     feed_count = int(cat.get("feed_count") or 0)
-    max_feed_count = int(cat.get("max_feed_count") or 10)
+    max_feed_count = int(cat.get("max_feed_count") or 5)
     if feed_count <= 0:
         return "新领养的小猫，快喂第 1 条让它开始成长。"
     if feed_count >= max_feed_count:
-        return f"这只猫已经喂满了 {max_feed_count} 次，它已经完全成长了，可以领养下一只了！"
-    if feed_count >= 5:
-        return f"已经喂了 {feed_count} 次，猫咪已完成第一次进化，继续喂到 {max_feed_count} 次达成终极形态。"
-    return f"已经完成 {feed_count}/{max_feed_count} 次喂养，离第 5 次进化还有 {max(0, 5 - feed_count)} 次。"
+        return f"这只猫已经喂满了 {max_feed_count} 次，之后只能继续对话，不能再喂食。"
+    return f"已经完成 {feed_count}/{max_feed_count} 次喂养，每喂一次都会刷新当前形象。"
+
+
+def build_adoption_context(owned_count: int) -> dict[str, Any]:
+    return {
+        "breed_options": INITIAL_CAT_BREEDS,
+        "color_options": INITIAL_CAT_COLORS,
+        "can_adopt_new": owned_count < 3,
+        "needs_initial_adoption": owned_count == 0,
+    }
 
 
 def create_async_task(task_type: str, cat_id: int) -> dict[str, Any]:
@@ -255,53 +274,52 @@ async def run_feed_task(task_id: str, cat: dict[str, Any], parsed_url: str, sett
         updated_cat = await asyncio.to_thread(add_cat_feed_record, int(cat["id"]), feed_result)
 
         feed_count = int(updated_cat.get("feed_count") or 0)
-        if feed_count in (5, 10):
-            update_async_task(task_id, message=f"第 {feed_count} 次喂养达成，正在生成新形象")
-            records = await asyncio.to_thread(list_cat_feed_records, int(updated_cat["id"]), feed_count)
-            summaries = [row["video_summary"] for row in records]
-            stats = {
-                "wisdom": updated_cat["wisdom"],
-                "grit": updated_cat["grit"],
-                "creativity": updated_cat["creativity"],
-                "agility": updated_cat["agility"],
-                "cooperation": updated_cat["cooperation"],
-            }
-            persona_result = await asyncio.wait_for(
-                asyncio.to_thread(
-                    generate_final_cat_persona,
-                    settings,
-                    updated_cat["name"],
-                    summaries,
-                    stats,
-                ),
-                timeout=45,
-            )
-            profile = persona_result["profile"]
-            image_result = await asyncio.wait_for(
-                asyncio.to_thread(
-                    generate_cat_image_with_model3,
-                    settings,
-                    updated_cat["name"],
-                    profile["story"],
-                    profile,
-                ),
-                timeout=60,
-            )
-            await asyncio.to_thread(
-                update_cat_final_persona,
-                int(updated_cat["id"]),
-                persona_result["raw"],
-                image_result["url"],
-                profile["personality"],
+        update_async_task(task_id, message=f"第 {feed_count} 次喂养完成，正在生成新形象")
+        records = await asyncio.to_thread(list_cat_feed_records, int(updated_cat["id"]), feed_count)
+        summaries = [row["video_summary"] for row in records]
+        stats = {
+            "wisdom": updated_cat["wisdom"],
+            "grit": updated_cat["grit"],
+            "creativity": updated_cat["creativity"],
+            "agility": updated_cat["agility"],
+            "cooperation": updated_cat["cooperation"],
+        }
+        persona_result = await asyncio.wait_for(
+            asyncio.to_thread(
+                generate_final_cat_persona,
+                settings,
+                updated_cat["name"],
+                summaries,
+                stats,
+            ),
+            timeout=45,
+        )
+        profile = persona_result["profile"]
+        image_result = await asyncio.wait_for(
+            asyncio.to_thread(
+                generate_cat_image_with_model3,
+                settings,
+                updated_cat["name"],
                 profile["story"],
-                "已进化" if feed_count == 5 else "已满级",
-            )
-            update_async_task(
-                task_id,
-                status="done",
-                message=f"第 {feed_count} 次喂养完成，猫咪形象已更新",
-            )
-            return
+                profile,
+            ),
+            timeout=60,
+        )
+        await asyncio.to_thread(
+            update_cat_final_persona,
+            int(updated_cat["id"]),
+            persona_result["raw"],
+            image_result["url"],
+            profile["personality"],
+            profile["story"],
+            "已满级" if feed_count >= 5 else "成长中",
+        )
+        update_async_task(
+            task_id,
+            status="done",
+            message=f"第 {feed_count} 次喂养完成，猫咪形象已更新",
+        )
+        return
 
         update_async_task(
             task_id,
@@ -316,10 +334,11 @@ def submit_feed_for_current_user(request: Request, raw_input: str) -> RedirectRe
     current_user = get_current_user(request)
     if not current_user:
         return redirect_with_message("/login", error="请先登录后再给猫喂抖音链接", extra={"next": "/my-cat"})
-    settings = get_settings()
-    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
-    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 10):
-        return redirect_with_message("/my-cat", error="这只猫已经喂满了 10 次，无法继续喂食，但可以继续对话。")
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        return redirect_with_message("/my-cat", error="请先领养第一只猫，再开始喂养和对话。")
+    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 5):
+        return redirect_with_message("/my-cat", error="这只猫已经喂满了 5 次，无法继续喂食，但可以继续对话。")
     parsed_url = extract_first_url(raw_input) or raw_input.strip()
     if not is_douyin_url(parsed_url):
         return redirect_with_message("/my-cat", error="请输入抖音作品链接")
@@ -391,22 +410,7 @@ def home(
     message: str = Query(default=""),
     error: str = Query(default=""),
 ):
-    current_user = get_current_user(request)
-    settings = get_settings()
-    my_cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings) if current_user else None
-    return templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={
-            "request": request,
-            "message": message,
-            "error": error,
-            "admin_user": get_current_admin(request),
-            "current_user": current_user,
-            "my_cat": my_cat,
-            "image_host_status": ImageHostScaffold.describe(settings),
-        },
-    )
+    return redirect_with_message("/my-cat", message=message, error=error)
 
 
 @app.post("/parse")
@@ -470,9 +474,8 @@ def register_submit(
         user = authenticate_user(username, password)
         if user:
             request.session["user_id"] = int(user["id"])
-            settings = get_settings()
-            ensure_user_cat(int(user["id"]), user["username"], settings=settings)
-        return redirect_with_message("/my-cat", message="注册成功，已自动领取一只初始猫")
+            request.session["show_growth_guide"] = True
+        return redirect_with_message("/my-cat", message="注册成功，请先领养你的第一只猫")
     return redirect_with_message("/register", error=msg)
 
 
@@ -508,8 +511,6 @@ def login_submit(
     if not user:
         return redirect_with_message("/login", error="用户名/邮箱或密码错误", extra={"next": next})
     request.session["user_id"] = int(user["id"])
-    settings = get_settings()
-    ensure_user_cat(int(user["id"]), user["username"], settings=settings)
     return redirect_with_message(next or "/my-cat", message=f"欢迎回来，{user['username']}")
 
 
@@ -528,10 +529,17 @@ def my_cat_page(
     current_user = get_current_user(request)
     if not current_user:
         return redirect_with_message("/login", error="请先登录后查看我的猫", extra={"next": "/my-cat"})
-    settings = get_settings()
-    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
-    feed_records = build_feed_record_cards(list_cat_feed_records(int(cat["id"]), limit=12))
-    chat_history = list_cat_messages(int(cat["id"]), limit=10)
+    owned_count = count_user_owned_cats(int(current_user["id"]))
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    owned_cats = [build_cat_card(row) for row in list_user_cats(int(current_user["id"]), limit=3)]
+    feed_records = build_feed_record_cards(list_cat_feed_records(int(cat["id"]), limit=12)) if cat else []
+    chat_history = list_cat_messages(int(cat["id"]), limit=10) if cat else []
+    adoption_context = build_adoption_context(owned_count)
+    show_growth_guide = bool(request.session.get("show_growth_guide")) and (
+        owned_count == 0 or (cat is not None and owned_count == 1 and int(cat.get("feed_count") or 0) == 0)
+    )
+    if cat and int(cat.get("feed_count") or 0) > 0:
+        request.session.pop("show_growth_guide", None)
     return templates.TemplateResponse(
         request=request,
         name="my_cat.html",
@@ -542,14 +550,21 @@ def my_cat_page(
             "admin_user": get_current_admin(request),
             "current_user": current_user,
             "cat": cat,
-            "stat_cards": build_cat_stat_cards(cat),
+            "owned_cats": owned_cats,
+            "owned_count": owned_count,
+            "stat_cards": build_cat_stat_cards(cat) if cat else [],
             "feed_records": feed_records,
             "chat_history": chat_history,
-            "stage_hint": build_cat_stage_hint(cat),
-            "remaining_feeds": max(0, int(cat.get("max_feed_count") or 10) - int(cat.get("feed_count") or 0)),
-            "can_feed": int(cat.get("feed_count") or 0) < int(cat.get("max_feed_count") or 10),
+            "stage_hint": build_cat_stage_hint(cat) if cat else "先完成首次领养，再开始喂养和聊天。",
+            "remaining_feeds": max(0, int(cat.get("max_feed_count") or 5) - int(cat.get("feed_count") or 0)) if cat else 0,
+            "can_feed": bool(cat) and int(cat.get("feed_count") or 0) < int(cat.get("max_feed_count") or 5),
             "can_generate_final": False,
-            "can_adopt_new": int(cat.get("feed_count") or 0) >= 10,
+            "can_adopt_new": adoption_context["can_adopt_new"],
+            "can_release": bool(cat),
+            "needs_initial_adoption": adoption_context["needs_initial_adoption"],
+            "breed_options": adoption_context["breed_options"],
+            "color_options": adoption_context["color_options"],
+            "show_growth_guide": show_growth_guide,
         },
     )
 
@@ -560,7 +575,9 @@ async def my_cat_chat_submit(request: Request, content: str = Form(...)):
     if not current_user:
         return redirect_with_message("/login")
     settings = get_settings()
-    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        return redirect_with_message("/my-cat", error="请先领养第一只猫")
     if not content.strip():
         return redirect_with_message("/my-cat", error="请输入对话内容")
 
@@ -581,7 +598,9 @@ async def my_cat_chat_stream(request: Request, content: str = Form(...)):
     if not current_user:
         raise HTTPException(status_code=401, detail="请先登录")
     settings = get_settings()
-    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        raise HTTPException(status_code=400, detail="请先领养第一只猫")
     cleaned = content.strip()
     if not cleaned:
         raise HTTPException(status_code=400, detail="请输入对话内容")
@@ -613,9 +632,11 @@ async def my_cat_feed_async(request: Request, raw_input: str = Form(...)):
     if not current_user:
         raise HTTPException(status_code=401, detail="请先登录")
     settings = get_settings()
-    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
-    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 10):
-        raise HTTPException(status_code=400, detail="这只猫已经喂满了 10 次，无法继续喂食，但可以继续对话。")
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        raise HTTPException(status_code=400, detail="请先领养第一只猫")
+    if int(cat.get("feed_count") or 0) >= int(cat.get("max_feed_count") or 5):
+        raise HTTPException(status_code=400, detail="这只猫已经喂满了 5 次，无法继续喂食，但可以继续对话。")
     parsed_url = extract_first_url(raw_input) or raw_input.strip()
     if not is_douyin_url(parsed_url):
         raise HTTPException(status_code=400, detail="请输入抖音作品链接")
@@ -633,19 +654,62 @@ def task_status(task_id: str):
     return JSONResponse(task)
 
 
+@app.post("/my-cat/adopt")
 @app.post("/my-cat/adopt-new")
-def my_cat_adopt_new(request: Request):
+def my_cat_adopt_new(
+    request: Request,
+    breed: str = Form(...),
+    color: str = Form(...),
+    image_url: str = Form(default=""),
+):
     current_user = get_current_user(request)
     if not current_user:
         return redirect_with_message("/login")
-    cat = get_user_cat(int(current_user["id"]))
-    if not cat or int(cat.get("feed_count") or 0) < 10:
-        return redirect_with_message("/my-cat", error="当前猫咪还未满级，不能领养下一只")
-    
+    if not breed.strip() or not color.strip():
+        return redirect_with_message("/my-cat", error="请先选择猫咪的品种和颜色")
+    if count_user_owned_cats(int(current_user["id"])) >= 3:
+        return redirect_with_message("/my-cat", error="每位用户最多只能拥有 3 只猫")
     set_all_user_cats_inactive(int(current_user["id"]))
     settings = get_settings()
-    ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
-    return redirect_with_message("/my-cat", message="恭喜！你已成功领养了一只新的动漫猫")
+    ai_data = None
+    try:
+        ai_data = generate_initial_cat_ai_data(
+            settings,
+            current_user["username"],
+            breed=breed,
+            color=color,
+            image_url=image_url,
+        )
+    except Exception:
+        pass
+    create_initial_cat_for_user(int(current_user["id"]), current_user["username"], ai_data)
+    return redirect_with_message("/my-cat", message=f"已领养一只{color}{breed}")
+
+
+@app.post("/my-cat/switch")
+def my_cat_switch(request: Request, cat_id: int = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login")
+    switched = activate_cat_for_user(int(current_user["id"]), cat_id)
+    if not switched:
+        return redirect_with_message("/my-cat", error="切换猫咪失败")
+    return redirect_with_message("/my-cat", message=f"已切换到 {switched['name']}")
+
+
+@app.post("/my-cat/release")
+def my_cat_release(request: Request, cat_id: int = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login")
+    target = get_cat_by_id(cat_id)
+    if not target or int(target.get("user_id") or 0) != int(current_user["id"]):
+        return redirect_with_message("/my-cat", error="这只猫不属于你")
+    ok = release_cat_to_plaza(cat_id, int(current_user["id"]))
+    if not ok:
+        return redirect_with_message("/my-cat", error="放生失败")
+    get_or_activate_user_cat(int(current_user["id"]))
+    return redirect_with_message("/my-cat", message=f"{target['name']} 已进入猫咪广场，等待新主人领养")
 
 
 @app.post("/my-cat/feed")
@@ -655,7 +719,7 @@ def my_cat_feed_submit(request: Request, raw_input: str = Form(...)):
 
 @app.post("/my-cat/generate-final")
 def my_cat_generate_final(request: Request):
-    return redirect_with_message("/my-cat", message="系统现在会在第 5 次和第 10 次喂养时自动生成新形象。")
+    return redirect_with_message("/my-cat", message="系统现在会在每次喂养后自动生成新形象。")
 
 
 @app.post("/my-cat/publish")
@@ -663,8 +727,9 @@ def my_cat_publish_toggle(request: Request, is_public: int = Form(...)):
     current_user = get_current_user(request)
     if not current_user:
         return redirect_with_message("/login")
-    settings = get_settings()
-    cat = ensure_user_cat(int(current_user["id"]), current_user["username"], settings=settings)
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        return redirect_with_message("/my-cat", error="请先领养第一只猫")
     update_cat_public_status(int(cat["id"]), bool(is_public))
     status_str = "已发布到猫咪广场" if is_public else "已从猫咪广场撤回"
     return redirect_with_message("/my-cat", message=status_str)
@@ -689,6 +754,20 @@ def cat_plaza_page(
             "current_user": get_current_user(request),
         },
     )
+
+
+@app.post("/plaza/adopt")
+def plaza_adopt(request: Request, cat_id: int = Form(...)):
+    current_user = get_current_user(request)
+    if not current_user:
+        return redirect_with_message("/login", error="请先登录后再领养猫咪", extra={"next": "/plaza"})
+    try:
+        adopted = adopt_plaza_cat(cat_id, int(current_user["id"]))
+    except Exception as exc:
+        return redirect_with_message("/plaza", error=str(exc))
+    if not adopted:
+        return redirect_with_message("/plaza", error="领养失败")
+    return redirect_with_message("/my-cat", message=f"已成功领养 {adopted['name']}")
 
 
 @app.get("/atlas/{atlas_id}")

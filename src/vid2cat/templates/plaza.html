@@ -1,53 +1,89 @@
 {% extends "index.html" %}
 
-{% block title %}猫咪广场 - vid2cat{% endblock %}
+{% block title %}猫咪市场 - vid2cat{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="page-header">
-        <h1>猫咪广场</h1>
-        <p class="subtitle">这里展示了所有用户公开的终局猫咪及其独特个性。</p>
+<div class="page-shell">
+    <div class="top-nav plain-nav">
+        <a class="brand" href="/my-cat">vid2cat</a>
+        <div class="nav-actions">
+            <a class="ghost-btn" href="/my-cat">我的猫</a>
+            <a class="ghost-btn active-tab" href="/plaza">猫咪市场</a>
+            {% if current_user %}
+            <span class="user-badge">已登录：{{ current_user.username }}</span>
+            <a class="ghost-btn" href="/logout">退出</a>
+            {% else %}
+            <a class="ghost-btn" href="/login">登录</a>
+            {% endif %}
+            <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+        </div>
     </div>
 
+    {% if message %}
+    <div class="notice success">{{ message }}</div>
+    {% endif %}
+    {% if error %}
+    <div class="notice error">{{ error }}</div>
+    {% endif %}
+
+    <section class="content-card compact-hero">
+        <div class="section-title-row">
+            <div>
+                <h2>猫咪市场</h2>
+                <span class="section-hint">这里展示公开展示的猫咪，以及已经放入市场、等待重新领养的猫咪</span>
+            </div>
+            <a class="ghost-btn anchor-btn" href="/my-cat">返回我的猫</a>
+        </div>
+    </section>
+
     {% if cat_cards %}
-    <div class="atlas-grid">
+    <section class="market-grid">
         {% for card in cat_cards %}
-        <div class="atlas-card">
-            <div class="card-image">
+        <article class="market-card">
+            <div class="market-card-cover">
                 {% if card.image_url %}
                 <img src="{{ card.image_url }}" alt="{{ card.cat_name }}">
                 {% else %}
-                <div class="image-placeholder">暂无猫咪形象</div>
+                <div class="market-card-placeholder">{{ card.cat_name[:1] }}</div>
                 {% endif %}
-                <div class="card-badge rarity-{{ card.stage }}">
-                    {{ card.stage }}
-                </div>
             </div>
-            <div class="card-content">
-                <div class="card-header">
-                    <h3 class="cat-name">{{ card.cat_name }}</h3>
-                    <span class="breed-tag">@{{ card.username }}</span>
+            <div class="market-card-body">
+                <div class="market-card-header">
+                    <div>
+                        <h3 class="cat-name">{{ card.cat_name }}</h3>
+                        <p class="market-owner">原主人：@{{ card.username }}</p>
+                    </div>
+                    <span class="pill muted">{{ card.stage }}</span>
                 </div>
+
                 <p class="card-summary">{{ card.summary }}</p>
-                <div class="card-footer">
-                    <div class="power-info">
-                        <span class="label">综合战力</span>
-                        <span class="value">{{ card.overall_power }}</span>
-                    </div>
-                    <div class="feed-info">
-                        <span class="label">喂养</span>
-                        <span class="value">{{ card.feed_count }}/{{ card.max_feed_count }}</span>
-                    </div>
+
+                <div class="pill-row compact market-meta-row">
+                    <span class="pill muted">总属性 {{ card.overall_power }}</span>
+                    <span class="pill muted">喂养 {{ card.feed_count }}/{{ card.max_feed_count }}</span>
+                    {% if card.available_for_adoption %}
+                    <span class="pill active">待领养</span>
+                    {% else %}
+                    <span class="pill muted">展示中</span>
+                    {% endif %}
                 </div>
+
+                {% if card.available_for_adoption and current_user %}
+                <form action="/plaza/adopt" method="POST" class="market-card-action">
+                    <input type="hidden" name="cat_id" value="{{ card.id }}">
+                    <button type="submit" class="primary-btn full-width">领养这只猫</button>
+                </form>
+                {% elif card.available_for_adoption %}
+                <div class="inline-warning">登录后才能领养市场中的猫咪。</div>
+                {% endif %}
             </div>
-        </div>
+        </article>
         {% endfor %}
-    </div>
+    </section>
     {% else %}
     <div class="empty-state">
-        <div class="empty-icon">🐱</div>
-        <p>广场上空空如也，快去喂养并发布你的猫咪吧！</p>
-        <a href="/my-cat" class="btn btn-primary">我的猫咪</a>
+        <p>市场里还没有可浏览的猫咪，先去养成并发布你的第一只猫吧。</p>
+        <a href="/my-cat" class="primary-btn anchor-btn">去我的猫</a>
     </div>
     {% endif %}
 </div>

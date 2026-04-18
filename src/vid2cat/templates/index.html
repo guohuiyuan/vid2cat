@@ -4,28 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="referrer" content="no-referrer">
-    <title>vid2cat - 动漫猫养成</title>
+    <title>{% block title %}vid2cat - 动漫猫养成{% endblock %}</title>
     <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
 </head>
 <body>
+    {% block content %}
     <div class="page-shell">
         <header class="hero-card">
-            <div class="top-nav">
-                <a class="brand" href="/">vid2cat</a>
-                <div class="nav-actions">
-                    <a class="ghost-btn active-tab" href="/">首页</a>
-                    <a class="ghost-btn" href="/plaza">猫咪广场</a>
-                    {% if current_user %}
-                    <a class="ghost-btn" href="/my-cat">我的猫</a>
-                    <span class="user-badge">已登录：{{ current_user.username }}</span>
-                    <a class="ghost-btn" href="/logout">退出</a>
-                    {% else %}
-                    <a class="ghost-btn" href="/login">登录</a>
-                    <a class="ghost-btn" href="/register">注册</a>
-                    {% endif %}
-                    <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
-                </div>
-            </div>
             <div class="hero-grid">
                 <div>
                     <p class="eyebrow">抖音内容驱动的动漫猫养成系统</p>
@@ -35,28 +20,29 @@
                         改变智慧、毅力、创造、灵敏、协作和能量属性。最多喂 5 次，逐步走向终局形态。
                     </p>
                     <div class="pill-row">
-                        <span class="pill">注册即领猫</span>
+                        <span class="pill">首次领养先选品种和颜色</span>
                         <span class="pill">1~5 次成长</span>
                         <span class="pill">属性实时更新</span>
-                        <span class="pill">数据统一落在 data/</span>
+                        <span class="pill">对话和喂养合并输入</span>
                     </div>
                     <div class="action-row hero-actions">
                         {% if current_user %}
                         <a class="primary-btn anchor-btn" href="/my-cat">进入我的猫</a>
                         {% else %}
-                        <a class="primary-btn anchor-btn" href="/register">立即领取</a>
+                        <a class="primary-btn anchor-btn" href="/register">注册后领养</a>
                         <a class="ghost-btn" href="/login">已有账号去登录</a>
                         {% endif %}
+                        <a class="ghost-btn" href="/plaza">浏览猫咪市场</a>
                     </div>
                 </div>
                 <div class="feature-panel">
                     <div class="feature-item">
-                        <span class="feature-label">喂养规则</span>
-                        <strong>每只猫最多喂 5 条抖音链接</strong>
+                        <span class="feature-label">首次领养</span>
+                        <strong>支持自选颜色、品种和可选图片</strong>
                     </div>
                     <div class="feature-item">
-                        <span class="feature-label">属性系统</span>
-                        <strong>能量、智慧、毅力、创造、灵敏、协作</strong>
+                        <span class="feature-label">互动方式</span>
+                        <strong>聊天和喂养共用一个输入框</strong>
                     </div>
                     <div class="feature-item">
                         <span class="feature-label">外部能力</span>
@@ -82,8 +68,8 @@
                 <div class="journey-grid">
                     <div class="journey-step">
                         <span class="pill muted">01</span>
-                        <strong>注册即领猫</strong>
-                        <p>系统会自动为你领取一只动漫猫，它带有随机的初始属性和背景故事。</p>
+                        <strong>注册后完成首次领养</strong>
+                        <p>先选择猫咪的品种和颜色，如果没有图片，系统会自动生成初始形象和背景设定。</p>
                     </div>
                     <div class="journey-step">
                         <span class="pill muted">02</span>
@@ -93,7 +79,7 @@
                     <div class="journey-step">
                         <span class="pill muted">03</span>
                         <strong>对话与交互</strong>
-                        <p>在对话页与猫咪互动，它会根据性格回复你，甚至在对话中也能喂食链接。</p>
+                        <p>在统一输入框里和猫咪互动，它会根据内容自动判断是聊天还是喂养。</p>
                     </div>
                     <div class="journey-step">
                         <span class="pill muted">04</span>
@@ -134,5 +120,6 @@
             </aside>
         </section>
     </div>
+    {% endblock %}
 </body>
 </html>
