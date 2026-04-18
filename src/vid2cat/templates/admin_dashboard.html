@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理员后台 - vid2cat</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="top-nav plain-nav">
+            <a class="brand" href="/">vid2cat</a>
+            <div class="nav-actions">
+                <a class="ghost-btn" href="/">前台</a>
+                <a class="ghost-btn" href="/admin/password">修改密码</a>
+                <a class="ghost-btn" href="/admin/logout">退出后台</a>
+            </div>
+        </div>
+
+        {% if message %}
+        <div class="notice success">{{ message }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="notice error">{{ error }}</div>
+        {% endif %}
+
+        <section class="hero-card admin-hero">
+            <div>
+                <p class="eyebrow">管理员控制台</p>
+                <h1>统一维护 AI 配置与图床配置</h1>
+                <p class="hero-copy">
+                    当前管理员为 {{ admin.username }}。这里可以配置三个 AI 模型的 `apiurl / apikey / model`，
+                    同时维护 PicGo-Core 对接 Gitee 图床所需的仓库、分支、路径与 Token。
+                </p>
+            </div>
+            <div class="feature-panel">
+                <div class="feature-item">
+                    <span class="feature-label">图床状态</span>
+                    <strong>{{ image_host_status }}</strong>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-label">Node.js 依赖</span>
+                    <strong>项目根目录已接入 PicGo-Core 上传脚本</strong>
+                </div>
+            </div>
+        </section>
+
+        <section class="dashboard-grid admin-grid">
+            <div class="content-card">
+                <div class="section-title-row">
+                    <h2>三套 AI 配置</h2>
+                    <span class="section-hint">每套配置对应一条明确链路，模型 1 已接入实际解析流程</span>
+                </div>
+                <form class="stack-form" action="/admin/settings" method="post">
+                    <div class="admin-form-grid">
+                        <div class="info-panel">
+                            <h3>模型 1</h3>
+                            <p>用途：抖音视频解析成功后，立即生成图鉴页里的 AI 摘要、优化建议和更精炼标签。</p>
+                            <p>当前生效点：用户提交抖音链接后，第一条视频解析链路优先调用这里的模型。</p>
+                            <input type="text" name="ai_model_1_api_url" placeholder="API URL" value="{{ settings.ai_model_1_api_url }}">
+                            <input type="text" name="ai_model_1_api_key" placeholder="API Key" value="{{ settings.ai_model_1_api_key }}">
+                            <input type="text" name="ai_model_1_model" placeholder="Model" value="{{ settings.ai_model_1_model }}">
+                        </div>
+                        <div class="info-panel">
+                            <h3>模型 2</h3>
+                            <p>用途：根据模型 1 的视频总结，生成人设层内容，例如猫咪品种、技能、性格、背景故事。</p>
+                            <p>当前状态：配置已保存，后续接入到“猫咪人设强化生成”流程。</p>
+                            <input type="text" name="ai_model_2_api_url" placeholder="API URL" value="{{ settings.ai_model_2_api_url }}">
+                            <input type="text" name="ai_model_2_api_key" placeholder="API Key" value="{{ settings.ai_model_2_api_key }}">
+                            <input type="text" name="ai_model_2_model" placeholder="Model" value="{{ settings.ai_model_2_model }}">
+                        </div>
+                        <div class="info-panel">
+                            <h3>模型 3</h3>
+                            <p>用途：根据模型 2 生成的人设和提示词，输出绘图结果或图鉴分享图。</p>
+                            <p>当前状态：配置已保存，后续接入到“图鉴绘图/分享卡生成”流程。</p>
+                            <input type="text" name="ai_model_3_api_url" placeholder="API URL" value="{{ settings.ai_model_3_api_url }}">
+                            <input type="text" name="ai_model_3_api_key" placeholder="API Key" value="{{ settings.ai_model_3_api_key }}">
+                            <input type="text" name="ai_model_3_model" placeholder="Model" value="{{ settings.ai_model_3_model }}">
+                        </div>
+                    </div>
+
+                    <div class="section-title-row section-gap">
+                        <h2>图床与图传配置</h2>
+                        <span class="section-hint">参考 pic-store，真实接入 PicGo-Core + Gitee</span>
+                    </div>
+
+                    <div class="admin-form-grid">
+                        <div class="info-panel">
+                            <h3>Gitee 图床</h3>
+                            <input type="text" name="gitee_repo" placeholder="用户名/仓库名" value="{{ settings.gitee_repo }}">
+                            <input type="text" name="gitee_branch" placeholder="分支" value="{{ settings.gitee_branch }}">
+                            <input type="text" name="gitee_path" placeholder="仓库路径" value="{{ settings.gitee_path }}">
+                            <input type="text" name="gitee_token" placeholder="Gitee Token" value="{{ settings.gitee_token }}">
+                            <input type="text" name="gitee_custom_url" placeholder="自定义访问域名" value="{{ settings.gitee_custom_url }}">
+                        </div>
+                        <div class="info-panel">
+                            <h3>后端图传补充</h3>
+                            <input type="text" name="extra_upload_token" placeholder="其他图传 Token" value="{{ settings.extra_upload_token }}">
+                            <p>该 Token 可留给后续其他上传服务或中转接口使用。</p>
+                        </div>
+                    </div>
+
+                    <div class="action-row">
+                        <button class="primary-btn" type="submit">保存后台配置</button>
+                    </div>
+                </form>
+            </div>
+
+            <aside class="content-card side-card">
+                <div class="section-title-row">
+                    <h2>图床测试</h2>
+                    <span class="section-hint">直接调用 Node.js 上传脚本</span>
+                </div>
+                <form class="stack-form" action="/admin/upload-test" method="post" enctype="multipart/form-data">
+                    <input type="file" name="image" accept="image/*" required>
+                    <button class="accent-btn full-width" type="submit">上传测试图片</button>
+                </form>
+
+                {% if uploaded_url %}
+                <div class="info-panel">
+                    <h3>上传结果</h3>
+                    <p class="break-all">{{ uploaded_url }}</p>
+                    <a class="ghost-btn full-width" href="{{ uploaded_url }}" target="_blank" rel="noopener noreferrer">打开图片地址</a>
+                </div>
+                {% endif %}
+            </aside>
+        </section>
+    </div>
+</body>
+</html>

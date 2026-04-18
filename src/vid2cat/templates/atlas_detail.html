@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ atlas.title }} - vid2cat</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <div class="top-nav plain-nav">
+            <a class="brand" href="/">vid2cat</a>
+            <div class="nav-actions">
+                <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+                <a class="ghost-btn" href="/">返回首页</a>
+                <a class="ghost-btn" href="/register">注册</a>
+            </div>
+        </div>
+
+        {% if message %}
+        <div class="notice success">{{ message }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="notice error">{{ error }}</div>
+        {% endif %}
+
+        <section class="detail-hero">
+            <div class="detail-cover {% if not atlas.cover_url %}placeholder-cover{% endif %}">
+                {% if atlas.cover_url %}
+                <img src="{{ atlas.cover_url }}" alt="{{ atlas.title }}">
+                {% else %}
+                <span>{{ atlas.title[:2] }}</span>
+                {% endif %}
+            </div>
+            <div class="detail-main">
+                <div class="pill-row compact">
+                    <span class="pill">{{ atlas.status }}</span>
+                    <span class="pill muted">作者：{{ atlas.author_name or "未知作者" }}</span>
+                    <span class="pill muted">作品 ID：{{ atlas.aweme_id or "待补全" }}</span>
+                </div>
+                <h1>{{ atlas.title }}</h1>
+                <p class="hero-copy">{{ atlas.description or atlas.ai_summary }}</p>
+                <div class="action-row">
+                    <a class="primary-btn anchor-btn" href="{{ atlas.source_url }}" target="_blank" rel="noopener noreferrer">打开原始链接</a>
+                    <a class="ghost-btn" href="/">继续搜索</a>
+                </div>
+                {% if atlas.parse_error %}
+                <div class="inline-warning">解析说明：{{ atlas.parse_error }}</div>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="dashboard-grid detail-grid">
+            <div class="content-card">
+                <div class="section-title-row">
+                    <h2>视频与图鉴</h2>
+                    <span class="section-hint">当前优先呈现解析结果和图鉴骨架</span>
+                </div>
+
+                {% if atlas.video_url %}
+                <div class="media-card">
+                    <video class="preview-video" controls preload="metadata" poster="{{ atlas.cover_url or '' }}">
+                        <source src="{{ atlas.video_url }}">
+                    </video>
+                </div>
+                {% else %}
+                <div class="empty-state">当前没有可直接播放的视频链接，保留了图鉴骨架与原始地址供后续继续接入。</div>
+                {% endif %}
+
+                <div class="score-grid">
+                    {% for label, value in scores.items() %}
+                    <div class="score-card">
+                        <span>{{ label }}</span>
+                        <strong>{{ value }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="info-panel">
+                    <h3>AI 摘要</h3>
+                    <p>{{ atlas.ai_summary or "待接入全模态总结模型" }}</p>
+                </div>
+
+                <div class="info-panel">
+                    <h3>优化建议</h3>
+                    <p>{{ atlas.optimization_tips or "待接入爆款优化建议生成器" }}</p>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <div class="section-title-row">
+                    <h2>猫咪人设</h2>
+                    <span class="section-hint">模型2生成人设，模型3生成猫咪图像</span>
+                </div>
+                {% if atlas.cat_image_url %}
+                <div class="generated-image-card">
+                    <img src="{{ atlas.cat_image_url }}" alt="猫咪图鉴生成图">
+                </div>
+                {% endif %}
+                <div class="profile-grid">
+                    {% for item in profile_items %}
+                    <div class="profile-item">
+                        <span>{{ item.label }}</span>
+                        <strong>{{ item.value }}</strong>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="info-panel">
+                    <h3>Prompt Scaffold</h3>
+                    <pre>{{ atlas.prompt_scaffold or "待补充提示词工程模板" }}</pre>
+                </div>
+
+                <div class="info-panel">
+                    <h3>模型3绘图提示词</h3>
+                    <pre>{{ atlas.cat_image_prompt or "当前还没有生成绘图提示词" }}</pre>
+                </div>
+
+                <div class="info-panel">
+                    <h3>模型1输出</h3>
+                    <pre>{{ atlas.model1_output or "当前未记录模型1原始输出" }}</pre>
+                </div>
+
+                <div class="info-panel">
+                    <h3>模型2输出</h3>
+                    <pre>{{ atlas.model2_output or "当前未记录模型2原始输出" }}</pre>
+                </div>
+
+                <div class="info-panel">
+                    <h3>模型3输出</h3>
+                    <pre>{{ atlas.model3_output or "当前未记录模型3原始输出" }}</pre>
+                </div>
+
+                <div class="info-panel">
+                    <h3>图床接口状态</h3>
+                    <p>{{ runtime_image_host_status or atlas.image_host_status or "待接入图床" }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="content-card">
+            <div class="section-title-row">
+                <h2>评论区</h2>
+                <span class="section-hint">先完成基础互动，后续再加审核与评分</span>
+            </div>
+            <form class="comment-form" action="/atlas/{{ atlas.id }}/comment" method="post">
+                <div class="two-col-inputs">
+                    <input type="text" name="username" placeholder="你的昵称" required>
+                    <input type="text" value="{{ atlas.title }}" disabled>
+                </div>
+                <textarea name="content" rows="4" placeholder="说说你对这个猫咪图鉴/视频选题的看法" required></textarea>
+                <div class="action-row">
+                    <button class="accent-btn" type="submit">发布评论</button>
+                </div>
+            </form>
+
+            {% if comments %}
+            <div class="comment-list">
+                {% for comment in comments %}
+                <article class="comment-card">
+                    <div class="comment-header">
+                        <strong>{{ comment.username }}</strong>
+                        <span>{{ comment.created_at.replace('T', ' ')[:19] }}</span>
+                    </div>
+                    <p>{{ comment.content }}</p>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state compact">还没有评论，发一条作为第一位体验者吧。</div>
+            {% endif %}
+        </section>
+    </div>
+</body>
+</html>

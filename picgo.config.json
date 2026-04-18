@@ -1,0 +1,12 @@
+{
+  "picBed": {
+    "uploader": "smms",
+    "current": "smms"
+  },
+  "picgoPlugins": {
+    "picgo-plugin-github-plus": true
+  },
+  "picgo-plugin-github-plus": {
+    "lastSync": "2026-04-18 02:22:13"
+  }
+}

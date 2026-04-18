@@ -1,0 +1,15 @@
+{
+  "name": "vid2cat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PicGo-Core uploader for vid2cat",
+  "scripts": {
+    "upload": "node ./scripts/upload.js",
+    "upload:help": "node ./scripts/upload.js --help"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "picgo": "^2.0.3",
+    "picgo-plugin-github-plus": "^1.2.3"
+  }
+}

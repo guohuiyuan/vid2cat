@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>vid2cat - 抖音视频 AI 猫咪图鉴</title>
+    <link rel="stylesheet" href="{{ request.url_for('static', path='style.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero-card">
+            <div class="top-nav">
+                <a class="brand" href="/">vid2cat</a>
+                <div class="nav-actions">
+                    <a class="ghost-btn" href="/admin{% if admin_user %}{% else %}/login{% endif %}">{{ "后台" if admin_user else "管理员" }}</a>
+                    <a class="ghost-btn" href="/register">注册</a>
+                </div>
+            </div>
+            <div class="hero-grid">
+                <div>
+                    <p class="eyebrow">抖音视频 AI 猫咪图鉴系统</p>
+                    <h1>先把搜索、解析、评论和图鉴界面跑起来</h1>
+                    <p class="hero-copy">
+                        当前版本是可继续演进的 Web 雏形：抖音搜索先给可替换骨架，
+                        解析优先打通基本链路，图床和大模型提示词先保留扩展位。
+                    </p>
+                    <div class="pill-row">
+                        <span class="pill">Python + FastAPI</span>
+                        <span class="pill">uv 管理</span>
+                        <span class="pill">SQLite 原型</span>
+                        <span class="pill">HTML 模板</span>
+                    </div>
+                </div>
+                <div class="feature-panel">
+                    <div class="feature-item">
+                        <span class="feature-label">图床</span>
+                        <strong>{{ image_host_status }}</strong>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-label">AI 提示词</span>
+                        <strong>输出基础 Prompt Scaffold</strong>
+                    </div>
+                    <div class="feature-item">
+                        <span class="feature-label">抖音能力</span>
+                        <strong>搜索可替换，解析尽量直连</strong>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        {% if message %}
+        <div class="notice success">{{ message }}</div>
+        {% endif %}
+        {% if error %}
+        <div class="notice error">{{ error }}</div>
+        {% endif %}
+
+        <section class="search-box">
+            <div class="section-title-row">
+                <h2>搜索与解析</h2>
+                <span class="section-hint">模仿 `go-music-dl` 的首页体验，先做可落地雏形</span>
+            </div>
+
+            <form class="search-form" action="/" method="get">
+                <div class="input-group">
+                    <input
+                        id="keyword-input"
+                        type="text"
+                        name="q"
+                        value="{{ query }}"
+                        placeholder="搜索关键词，或直接粘贴抖音作品链接"
+                    >
+                    <button class="primary-btn" type="submit">搜索</button>
+                </div>
+            </form>
+
+            <form class="parse-form" action="/parse" method="post">
+                <div class="input-group">
+                    <input
+                        id="parse-url-input"
+                        type="text"
+                        name="url"
+                        value="{{ query if is_url_query else '' }}"
+                        placeholder="单独解析：粘贴 v.douyin.com / douyin.com/video 链接"
+                        required
+                    >
+                    <button class="accent-btn" type="submit">生成图鉴</button>
+                </div>
+            </form>
+        </section>
+
+        {% if query %}
+        <section class="content-card">
+            <div class="section-title-row">
+                <h2>搜索结果</h2>
+                <span class="section-hint">本地图鉴优先展示，抖音真搜索接口先预留替换位</span>
+            </div>
+            {% if search_results %}
+            <div class="result-list">
+                {% for result in search_results %}
+                <article class="result-card">
+                    <div class="result-cover {% if not result.cover_url %}placeholder-cover{% endif %}">
+                        {% if result.cover_url %}
+                        <img src="{{ result.cover_url }}" alt="{{ result.title }}">
+                        {% else %}
+                        <span>{{ result.title[:2] }}</span>
+                        {% endif %}
+                    </div>
+                    <div class="result-main">
+                        <div class="result-meta-top">
+                            <span class="tag {% if result.is_local %}tag-local{% endif %}">
+                                {{ "本地图鉴" if result.is_local else "抖音候选" }}
+                            </span>
+                            <span class="tag">作者：{{ result.author_name }}</span>
+                        </div>
+                        <h3>{{ result.title }}</h3>
+                        <p>{{ result.description }}</p>
+                        <div class="pill-row compact">
+                            {% for tag in result.tags %}
+                            <span class="pill muted">{{ tag }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="result-actions">
+                        {% if result.is_local and result.atlas_id %}
+                        <a class="ghost-btn" href="/atlas/{{ result.atlas_id }}">查看图鉴</a>
+                        {% else %}
+                        <button class="ghost-btn" type="button" onclick="prefillParse('{{ result.share_url }}')">填入解析</button>
+                        <a class="ghost-btn" href="{{ result.share_url }}" target="_blank" rel="noopener noreferrer">打开链接</a>
+                        {% endif %}
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="empty-state">没有找到匹配结果，可以直接粘贴抖音链接进入解析流程。</div>
+            {% endif %}
+        </section>
+        {% endif %}
+
+        <section class="dashboard-grid">
+            <div class="content-card">
+                <div class="section-title-row">
+                    <h2>最近图鉴</h2>
+                    <span class="section-hint">支持后续继续扩展为排行榜和收藏页</span>
+                </div>
+                <div class="atlas-grid">
+                    {% for atlas in recent_atlases %}
+                    <a class="atlas-card" href="/atlas/{{ atlas.id }}">
+                        <div class="atlas-cover {% if not atlas.cover_url %}placeholder-cover{% endif %}">
+                            {% if atlas.cover_url %}
+                            <img src="{{ atlas.cover_url }}" alt="{{ atlas.title }}">
+                            {% else %}
+                            <span>{{ atlas.title[:2] }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="atlas-body">
+                            <span class="tag">{{ atlas.status }}</span>
+                            <h3>{{ atlas.title }}</h3>
+                            <p>{{ atlas.ai_summary or atlas.description or "暂无摘要" }}</p>
+                            <div class="atlas-meta">
+                                <span>作者：{{ atlas.author_name or "未知作者" }}</span>
+                                <span>ID：{{ atlas.aweme_id or "待补全" }}</span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <aside class="content-card side-card">
+                <div class="section-title-row">
+                    <h2>最近注册</h2>
+                    <span class="section-hint">先完成注册雏形，不做登录态</span>
+                </div>
+                {% if recent_users %}
+                <div class="user-list">
+                    {% for user in recent_users %}
+                    <div class="user-item">
+                        <div>
+                            <strong>{{ user.username }}</strong>
+                            <p>{{ user.email }}</p>
+                        </div>
+                        <span>{{ user.created_at[:10] }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="empty-state compact">还没有用户，先去注册一个体验评论功能。</div>
+                {% endif %}
+            </aside>
+        </section>
+    </div>
+
+    <script src="{{ request.url_for('static', path='app.js') }}"></script>
+</body>
+</html>
