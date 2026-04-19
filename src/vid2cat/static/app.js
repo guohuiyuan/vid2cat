@@ -39,6 +39,10 @@ document.addEventListener("DOMContentLoaded", () => {
     let typewriterQueue = "";
     let typewriterStreamDone = false;
     let lastGrowthLogKey = "";
+    let feedDurationTimer = null;
+    let feedValidationState = "idle"; // idle | checking | valid | invalid
+    let feedValidationMessage = "";
+    let lastValidatedFeedUrl = "";
 
     const setTaskStatus = (text, variant = "progress") => {
         if (!taskStatusBar) return;
@@ -782,6 +786,59 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const containsDouyinUrl = (text) => douyinPattern.test(text || "");
 
+    const normalizeInputAsUrl = (text) => {
+        const value = String(text || "").trim();
+        const matched = value.match(/https?:\/\/[^\s]+/i);
+        return (matched ? matched[0] : value).trim();
+    };
+
+    const validateFeedDuration = async (rawInput) => {
+        const normalized = normalizeInputAsUrl(rawInput);
+        if (!normalized || !containsDouyinUrl(normalized)) {
+            feedValidationState = "idle";
+            feedValidationMessage = "";
+            lastValidatedFeedUrl = "";
+            updateInteractionUi();
+            return;
+        }
+
+        if (lastValidatedFeedUrl === normalized && feedValidationState === "valid") {
+            updateInteractionUi();
+            return;
+        }
+
+        feedValidationState = "checking";
+        feedValidationMessage = "正在解析视频时长...";
+        lastValidatedFeedUrl = normalized;
+        updateInteractionUi();
+
+        try {
+            const formData = new FormData();
+            formData.append("raw_input", normalized);
+            const response = await fetch("/api/my-cat/feed/validate", {
+                method: "POST",
+                body: formData,
+            });
+            const payload = await response.json();
+            if (!response.ok) {
+                throw new Error(payload.detail || "视频时长校验失败");
+            }
+            if (normalizeInputAsUrl(interactionInput?.value || "") !== normalized) {
+                return;
+            }
+            feedValidationState = "valid";
+            feedValidationMessage = payload.message || "视频时长符合喂养条件。";
+            updateInteractionUi();
+        } catch (error) {
+            if (normalizeInputAsUrl(interactionInput?.value || "") !== normalized) {
+                return;
+            }
+            feedValidationState = "invalid";
+            feedValidationMessage = error.message || "视频时长校验失败";
+            updateInteractionUi();
+        }
+    };
+
     const updateInteractionUi = () => {
         if (!interactionInput || !interactionSubmitButton || !interactionHint) {
             return;
@@ -791,16 +848,40 @@ document.addEventListener("DOMContentLoaded", () => {
         const lockedMessage = interactionInput.dataset.feedLockedMessage || "当前暂时不能喂养。";
         const isFeed = containsDouyinUrl(value);
         if (isFeed && !feedLocked) {
-            interactionSubmitButton.textContent = "开始喂养";
-            interactionHint.textContent = "检测到抖音链接，提交后会进入喂养和形象更新流程（仅支持不超过 1 分钟的视频）。";
+            if (feedValidationState === "checking") {
+                interactionSubmitButton.textContent = "解析中...";
+                interactionSubmitButton.disabled = true;
+                interactionHint.textContent = feedValidationMessage || "正在解析视频时长...";
+                return;
+            }
+            if (feedValidationState === "invalid") {
+                interactionSubmitButton.textContent = "暂不能喂养";
+                interactionSubmitButton.disabled = true;
+                interactionHint.textContent = feedValidationMessage || "当前视频不符合喂养条件。";
+                return;
+            }
+            if (feedValidationState === "valid") {
+                interactionSubmitButton.textContent = "开始喂养";
+                interactionSubmitButton.disabled = false;
+                interactionHint.textContent = feedValidationMessage || "视频时长符合喂养条件。";
+                return;
+            }
+            interactionSubmitButton.textContent = "解析中...";
+            interactionSubmitButton.disabled = true;
+            interactionHint.textContent = "检测到抖音链接，正在解析视频时长...";
             return;
         }
         if (isFeed && feedLocked) {
             interactionSubmitButton.textContent = "暂不能喂养";
+            interactionSubmitButton.disabled = true;
             interactionHint.textContent = lockedMessage;
             return;
         }
+        feedValidationState = "idle";
+        feedValidationMessage = "";
+        lastValidatedFeedUrl = "";
         interactionSubmitButton.textContent = "发送";
+        interactionSubmitButton.disabled = false;
         interactionHint.textContent = feedLocked
             ? lockedMessage
             : "输入普通文字会直接进入聊天。";
@@ -932,7 +1013,21 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         };
 
-        interactionInput.addEventListener("input", updateInteractionUi);
+        interactionInput.addEventListener("input", () => {
+            updateInteractionUi();
+            const content = interactionInput.value.trim();
+            if (containsDouyinUrl(content)) {
+                const normalized = normalizeInputAsUrl(content);
+                if (normalized !== lastValidatedFeedUrl || feedValidationState === "invalid") {
+                    if (feedDurationTimer) {
+                        window.clearTimeout(feedDurationTimer);
+                    }
+                    feedDurationTimer = window.setTimeout(() => {
+                        void validateFeedDuration(content);
+                    }, 420);
+                }
+            }
+        });
         updateInteractionUi();
 
         interactionForm.addEventListener("submit", async (event) => {
@@ -951,6 +1046,9 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                     if (feedLocked) {
                         throw new Error(interactionInput.dataset.feedLockedMessage || "当前暂时不能喂养，只能聊天。");
+                    }
+                    if (feedValidationState !== "valid") {
+                        throw new Error(feedValidationMessage || "请先等待视频时长解析完成且不超过 1 分钟，再喂养。");
                     }
                     await submitFeed(content);
                 } else {

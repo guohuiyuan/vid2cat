@@ -68,6 +68,62 @@ def deep_get(data: dict[str, Any], path: list[str | int], default: Any = None) -
     return current
 
 
+def extract_duration_seconds(item: dict[str, Any]) -> int:
+    # Douyin commonly stores duration in milliseconds, but some payloads use seconds.
+    candidates = [
+        deep_get(item, ["video", "duration"], 0),
+        deep_get(item, ["duration"], 0),
+    ]
+    for raw in candidates:
+        try:
+            value = int(raw or 0)
+        except (TypeError, ValueError):
+            continue
+        if value <= 0:
+            continue
+        if value >= 1000:
+            return max(0, value // 1000)
+        return value
+    return 0
+
+
+def inspect_douyin_video_duration(url: str) -> dict[str, Any]:
+    source_url = extract_first_url(url) or url.strip()
+    if not is_douyin_url(source_url):
+        raise ValueError("请输入抖音作品链接")
+
+    try:
+        canonical_url = resolve_douyin_url(source_url)
+    except Exception:
+        canonical_url = source_url
+
+    aweme_id = "pending"
+    try:
+        aweme_id = extract_aweme_id(canonical_url)
+    except Exception:
+        pass
+
+    router_data, _ = fetch_router_payload(canonical_url, aweme_id)
+    item = deep_get(
+        router_data,
+        ["loaderData", "video_(id)/page", "videoInfoRes", "item_list", 0],
+        None,
+    ) or deep_get(
+        router_data,
+        ["loaderData", "note_(id)/page", "videoInfoRes", "item_list", 0],
+        {},
+    )
+    title = str(item.get("desc") or f"抖音内容 {aweme_id}")[:120]
+    duration_seconds = extract_duration_seconds(item)
+    return {
+        "source_url": source_url,
+        "canonical_url": canonical_url,
+        "aweme_id": aweme_id,
+        "title": title,
+        "duration_seconds": duration_seconds,
+    }
+
+
 def normalize_router_data(raw_data: str) -> dict[str, Any]:
     raw_data = raw_data.strip().rstrip("; \n\r\t")
     if not raw_data.startswith("{"):
@@ -1135,8 +1191,7 @@ def parse_douyin_to_feed(
         cover_url = deep_get(item, ["video", "cover", "url_list", 0], "") or deep_get(
             item, ["images", 0, "url_list", 0], ""
         )
-        duration_ms = int(deep_get(item, ["video", "duration"], 0) or 0)
-        duration_seconds = max(0, duration_ms // 1000)
+        duration_seconds = extract_duration_seconds(item)
         tags = [tag for tag in re.split(r"[#\s,，/]+", description) if tag][:8]
         hot, rhythm, knowledge, resonance = score_from_text(
             title, author_name, aweme_id
@@ -1166,6 +1221,13 @@ def parse_douyin_to_feed(
                 pass
     except Exception as exc:
         description = f"解析时出现异常：{exc}"
+
+    if duration_seconds <= 0:
+        raise ValueError("未能识别视频时长，无法校验 1 分钟限制。请换一个可公开访问且不超过 1 分钟的抖音视频。")
+    if duration_seconds > 60:
+        raise ValueError(
+            f"当前视频时长约 {duration_seconds} 秒，超过 1 分钟。请换一个不超过 1 分钟的抖音视频。"
+        )
 
     deltas = build_feed_deltas(title, structured, tags)
     total_score = int(structured.get("total_score", 70) or 70)

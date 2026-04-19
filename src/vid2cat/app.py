@@ -83,6 +83,7 @@ from .services import (
     parse_cat_profile,
     parse_douyin_to_atlas,
     parse_douyin_to_feed,
+    inspect_douyin_video_duration,
     parse_model1_analysis,
 )
 from .share_cards import render_cat_share_card
@@ -554,6 +555,10 @@ async def run_feed_task(
             timeout=45,
         )
         duration_seconds = int(feed_result.get("duration_seconds") or 0)
+        if duration_seconds <= 0:
+            raise ValueError(
+                "未能识别视频时长，无法校验 1 分钟限制。请换一个可公开访问且不超过 1 分钟的抖音视频。"
+            )
         if duration_seconds > 60:
             raise ValueError(
                 f"当前视频时长约 {duration_seconds} 秒，超过 1 分钟。请换一个不超过 1 分钟的抖音视频。"
@@ -1113,6 +1118,43 @@ async def my_cat_feed_async(request: Request, raw_input: str = Form(...)):
     )
     return JSONResponse(
         {"task_id": task["id"], "status": task["status"], "message": "喂养任务已创建"}
+    )
+
+
+@app.post("/api/my-cat/feed/validate")
+async def my_cat_feed_validate(request: Request, raw_input: str = Form(...)):
+    current_user = get_or_create_session_user(request)
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        raise HTTPException(status_code=400, detail="请先领养第一只猫")
+    can_feed, reason = get_feed_gate_status(cat)
+    if not can_feed:
+        raise HTTPException(status_code=400, detail=reason)
+
+    parsed_url = extract_first_url(raw_input) or raw_input.strip()
+    if not is_douyin_url(parsed_url):
+        raise HTTPException(status_code=400, detail="请输入抖音作品链接")
+
+    info = await asyncio.to_thread(inspect_douyin_video_duration, parsed_url)
+    duration_seconds = int(info.get("duration_seconds") or 0)
+    if duration_seconds <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="未能识别视频时长，无法校验 1 分钟限制。请换一个可公开访问且不超过 1 分钟的抖音视频。",
+        )
+    if duration_seconds > 60:
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前视频时长约 {duration_seconds} 秒，超过 1 分钟。请换一个不超过 1 分钟的抖音视频。",
+        )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "duration_seconds": duration_seconds,
+            "title": str(info.get("title") or "未命名视频"),
+            "message": f"视频时长 {duration_seconds} 秒，符合喂养条件。",
+        }
     )
 
 
