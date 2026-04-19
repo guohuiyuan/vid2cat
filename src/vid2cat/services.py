@@ -9,7 +9,13 @@ from typing import Any
 import httpx
 import json_repair
 
-from .integrations import AIModelConfig, AIModelRuntime, ImageHostScaffold, PromptEngineScaffold, PromptScaffoldPayload
+from .integrations import (
+    AIModelConfig,
+    AIModelRuntime,
+    ImageHostScaffold,
+    PromptEngineScaffold,
+    PromptScaffoldPayload,
+)
 
 
 DEFAULT_HEADERS = {
@@ -97,11 +103,21 @@ def build_fallback_model1_analysis(
         "rhythm_score": rhythm,
         "resonance_score": resonance,
         "key_moments": [
-            {"time_range": "0-3秒", "summary": "开头需要更强的钩子，适合突出最有记忆点的角色或动作。"},
-            {"time_range": "3-10秒", "summary": "中段承担信息展开和节奏推进，适合强化主题与情绪。"},
-            {"time_range": "10秒后", "summary": "结尾适合补评论引导或收藏理由，延长传播尾效。"},
+            {
+                "time_range": "0-3秒",
+                "summary": "开头需要更强的钩子，适合突出最有记忆点的角色或动作。",
+            },
+            {
+                "time_range": "3-10秒",
+                "summary": "中段承担信息展开和节奏推进，适合强化主题与情绪。",
+            },
+            {
+                "time_range": "10秒后",
+                "summary": "结尾适合补评论引导或收藏理由，延长传播尾效。",
+            },
         ],
-        "full_summary": description or f"视频《{title}》已经完成基础解析，适合进一步做成猫咪图鉴。",
+        "full_summary": description
+        or f"视频《{title}》已经完成基础解析，适合进一步做成猫咪图鉴。",
         "optimization_tips": [
             "增强前三秒钩子",
             "突出角色辨识度与主题记忆点",
@@ -152,7 +168,9 @@ def generate_video_analysis_with_model1(
         "5. tags 为字符串数组\n"
         "6. perspectives 为对象，必须包含 review, audience, author 三个字段"
     )
-    result = AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.5)
+    result = AIModelRuntime.complete_text(
+        config, system_prompt, user_prompt, temperature=0.5
+    )
     data = json_repair.loads(result)
     key_moments = data.get("key_moments") or []
     normalized_key_moments = []
@@ -161,12 +179,20 @@ def generate_video_analysis_with_model1(
             continue
         normalized_key_moments.append(
             {
-                "time_range": str(item.get("time_range") or item.get("time") or "未标注"),
+                "time_range": str(
+                    item.get("time_range") or item.get("time") or "未标注"
+                ),
                 "summary": str(item.get("summary") or item.get("content") or ""),
             }
         )
-    refined_tags = [str(tag).strip() for tag in (data.get("tags") or []) if str(tag).strip()][:8]
-    optimization_tips = [str(tip).strip() for tip in (data.get("optimization_tips") or []) if str(tip).strip()][:8]
+    refined_tags = [
+        str(tag).strip() for tag in (data.get("tags") or []) if str(tag).strip()
+    ][:8]
+    optimization_tips = [
+        str(tip).strip()
+        for tip in (data.get("optimization_tips") or [])
+        if str(tip).strip()
+    ][:8]
     perspectives = data.get("perspectives") or {}
     normalized = {
         "total_score": int(data.get("total_score") or 75),
@@ -186,7 +212,8 @@ def generate_video_analysis_with_model1(
     }
     return {
         "summary": normalized["full_summary"],
-        "tips": "；".join(optimization_tips) or "建议继续补充前三秒钩子、评论区问题和封面表达。",
+        "tips": "；".join(optimization_tips)
+        or "建议继续补充前三秒钩子、评论区问题和封面表达。",
         "tags": refined_tags[:6],
         "raw": json.dumps(normalized, ensure_ascii=False),
         "structured": normalized,
@@ -251,16 +278,26 @@ def generate_cat_profile_with_model2(
         "请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
-    raw = AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.7)
+    raw = AIModelRuntime.complete_text(
+        config, system_prompt, user_prompt, temperature=0.7
+    )
     data = json_repair.loads(raw)
     profile = {
         "name": str(data.get("name") or f"{(tags[0] if tags else '猫咪')}喵"),
         "breed": str(data.get("breed") or "赛博短视频猫"),
         "skill": str(data.get("skill") or "内容拟态"),
         "power": str(data.get("power") or "88"),
-        "personality": str(data.get("personality") or "亲人、会接梗、观察力强，带一点小傲娇"),
-        "story": str(data.get("story") or f"它从《{title[:18]}》里获得了新的舞台感，也更懂得陪在主人身边。"),
-        "appearance": str(data.get("appearance") or "二次元猫咪造型，表情鲜明，眼神灵动，能看出陪伴感和故事感。"),
+        "personality": str(
+            data.get("personality") or "亲人、会接梗、观察力强，带一点小傲娇"
+        ),
+        "story": str(
+            data.get("story")
+            or f"它从《{title[:18]}》里获得了新的舞台感，也更懂得陪在主人身边。"
+        ),
+        "appearance": str(
+            data.get("appearance")
+            or "二次元猫咪造型，表情鲜明，眼神灵动，能看出陪伴感和故事感。"
+        ),
         "rarity": str(data.get("rarity") or "SR"),
         "image_prompt": str(data.get("image_prompt") or ""),
     }
@@ -355,12 +392,16 @@ def build_search_candidates(keyword: str) -> list[SearchResult]:
 
 
 def resolve_douyin_url(url: str) -> str:
-    with httpx.Client(headers=DEFAULT_HEADERS, follow_redirects=False, timeout=12.0) as client:
+    with httpx.Client(
+        headers=DEFAULT_HEADERS, follow_redirects=False, timeout=12.0
+    ) as client:
         response = client.get(url)
         location = response.headers.get("Location")
         if location:
             return location
-    with httpx.Client(headers=DEFAULT_HEADERS, follow_redirects=True, timeout=12.0) as client:
+    with httpx.Client(
+        headers=DEFAULT_HEADERS, follow_redirects=True, timeout=12.0
+    ) as client:
         response = client.get(url)
         response.raise_for_status()
         return str(response.url)
@@ -376,7 +417,9 @@ def extract_aweme_id(url: str) -> str:
     raise ValueError("未能从链接中提取抖音作品 ID")
 
 
-def fetch_router_payload(canonical_url: str, aweme_id: str) -> tuple[dict[str, Any], str]:
+def fetch_router_payload(
+    canonical_url: str, aweme_id: str
+) -> tuple[dict[str, Any], str]:
     candidates = [
         canonical_url,
         f"https://www.iesdouyin.com/share/video/{aweme_id}",
@@ -384,7 +427,9 @@ def fetch_router_payload(canonical_url: str, aweme_id: str) -> tuple[dict[str, A
     ]
     last_error: Exception | None = None
 
-    with httpx.Client(headers=DEFAULT_HEADERS, follow_redirects=True, timeout=15.0) as client:
+    with httpx.Client(
+        headers=DEFAULT_HEADERS, follow_redirects=True, timeout=15.0
+    ) as client:
         for page_url in candidates:
             try:
                 response = client.get(page_url)
@@ -420,9 +465,8 @@ def build_atlas_from_router_data(
 
     title = (item.get("desc") or f"抖音图鉴 {aweme_id}")[:120]
     author_name = deep_get(item, ["author", "nickname"], "未知作者")
-    cover_url = (
-        deep_get(item, ["video", "cover", "url_list", 0], "")
-        or deep_get(item, ["images", 0, "url_list", 0], "")
+    cover_url = deep_get(item, ["video", "cover", "url_list", 0], "") or deep_get(
+        item, ["images", 0, "url_list", 0], ""
     )
     raw_video_url = deep_get(item, ["video", "play_addr", "url_list", 0], "")
     video_url = raw_video_url.replace("playwm", "play") if raw_video_url else ""
@@ -479,14 +523,18 @@ def build_atlas_from_router_data(
     image_host_status = ImageHostScaffold.describe(settings)
     if settings:
         try:
-            profile_result = generate_cat_profile_with_model2(settings, title, summary, tags)
+            profile_result = generate_cat_profile_with_model2(
+                settings, title, summary, tags
+            )
             cat_profile = profile_result["profile"]
             model2_output = profile_result["raw"]
             prompt_scaffold = build_prompt_scaffold(title, summary, tags)
         except Exception as exc:
             optimization_tips += f" 模型2调用失败，已回退到本地猫咪模板。原因：{exc}"
         try:
-            image_result = generate_cat_image_with_model3(settings, title, summary, cat_profile)
+            image_result = generate_cat_image_with_model3(
+                settings, title, summary, cat_profile
+            )
             cat_image_url = image_result["url"]
             cat_image_prompt = image_result["prompt"]
             image_host_status = image_result["status"]
@@ -533,7 +581,11 @@ def build_fallback_atlas(
     error_message: str,
     settings: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    aweme_id = extract_aweme_id(canonical_url) if re.search(r"\d{8,}", canonical_url) else "pending"
+    aweme_id = (
+        extract_aweme_id(canonical_url)
+        if re.search(r"\d{8,}", canonical_url)
+        else "pending"
+    )
     summary = (
         "抖音解析暂未完全成功，已保留原始链接、失败原因和图鉴骨架。"
         "后续只需要替换解析器实现即可复用当前页面、评论和用户系统。"
@@ -564,7 +616,9 @@ def build_fallback_atlas(
         "model2_output": "",
         "model3_output": "",
         "cat_profile_json": json.dumps(cat_profile, ensure_ascii=False),
-        "prompt_scaffold": build_prompt_scaffold("待补全图鉴", summary, ["占位", "待接入"]),
+        "prompt_scaffold": build_prompt_scaffold(
+            "待补全图鉴", summary, ["占位", "待接入"]
+        ),
         "cat_image_url": "",
         "cat_image_prompt": "",
         "image_host_status": ImageHostScaffold.describe(settings),
@@ -572,26 +626,34 @@ def build_fallback_atlas(
     }
 
 
-def parse_douyin_to_atlas(url: str, settings: dict[str, str] | None = None) -> dict[str, Any]:
+def parse_douyin_to_atlas(
+    url: str, settings: dict[str, str] | None = None
+) -> dict[str, Any]:
     try:
         source_url = extract_first_url(url) or url.strip()
         canonical_url = resolve_douyin_url(source_url)
         aweme_id = extract_aweme_id(canonical_url)
         router_data, resolved_page = fetch_router_payload(canonical_url, aweme_id)
-        return build_atlas_from_router_data(source_url, resolved_page, aweme_id, router_data, settings=settings)
+        return build_atlas_from_router_data(
+            source_url, resolved_page, aweme_id, router_data, settings=settings
+        )
     except Exception as exc:  # pragma: no cover - network dependent
         source_url = extract_first_url(url) or url.strip()
         canonical_url = source_url
         if not canonical_url.startswith("http"):
             canonical_url = f"https://{canonical_url.lstrip('/')}"
-        return build_fallback_atlas(source_url, canonical_url, str(exc), settings=settings)
+        return build_fallback_atlas(
+            source_url, canonical_url, str(exc), settings=settings
+        )
 
 
 def enrich_local_results(rows: list[dict[str, Any]]) -> list[SearchResult]:
     results: list[SearchResult] = []
     for row in rows:
         description = row.get("ai_summary") or row.get("description") or "本地图鉴记录"
-        tags = [tag.strip() for tag in (row.get("tags") or "").split(",") if tag.strip()]
+        tags = [
+            tag.strip() for tag in (row.get("tags") or "").split(",") if tag.strip()
+        ]
         results.append(
             SearchResult(
                 title=row.get("title") or "未命名图鉴",
@@ -658,11 +720,17 @@ def parse_model1_analysis(raw: str) -> dict[str, Any]:
         "resonance_score": int(data.get("resonance_score") or 0),
         "key_moments": key_moments,
         "full_summary": str(data.get("full_summary") or "").strip(),
-        "optimization_tips": [str(t).strip() for t in (data.get("optimization_tips") or []) if str(t).strip()],
+        "optimization_tips": [
+            str(t).strip()
+            for t in (data.get("optimization_tips") or [])
+            if str(t).strip()
+        ],
         "tags": [str(t).strip() for t in (data.get("tags") or []) if str(t).strip()],
         "perspectives": {
             "review": str((data.get("perspectives") or {}).get("review") or "").strip(),
-            "audience": str((data.get("perspectives") or {}).get("audience") or "").strip(),
+            "audience": str(
+                (data.get("perspectives") or {}).get("audience") or ""
+            ).strip(),
             "author": str((data.get("perspectives") or {}).get("author") or "").strip(),
         },
     }
@@ -680,15 +748,21 @@ def score_to_delta(score: int) -> int:
     return -1
 
 
-def build_feed_deltas(title: str, analysis: dict[str, Any], tags: list[str]) -> dict[str, int]:
+def build_feed_deltas(
+    title: str, analysis: dict[str, Any], tags: list[str]
+) -> dict[str, int]:
     novelty_seed = 60 + (sum(ord(ch) for ch in title) + len(tags) * 7) % 35
-    grit_seed = round((analysis.get("total_score", 70) + analysis.get("resonance_score", 70)) / 2)
+    grit_seed = round(
+        (analysis.get("total_score", 70) + analysis.get("resonance_score", 70)) / 2
+    )
     return {
         "wisdom_delta": score_to_delta(int(analysis.get("knowledge_score", 70) or 70)),
         "grit_delta": score_to_delta(int(grit_seed or 70)),
         "creativity_delta": score_to_delta(int(novelty_seed)),
         "agility_delta": score_to_delta(int(analysis.get("rhythm_score", 70) or 70)),
-        "cooperation_delta": score_to_delta(int(analysis.get("resonance_score", 70) or 70)),
+        "cooperation_delta": score_to_delta(
+            int(analysis.get("resonance_score", 70) or 70)
+        ),
     }
 
 
@@ -701,12 +775,12 @@ def build_feed_skill(title: str, tags: list[str], score: int = 70) -> dict[str, 
             break
     if not seed_text:
         compact_title = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", title or "")
-        seed_text = (compact_title[:4] or "视频")
+        seed_text = compact_title[:4] or "视频"
     seed_value = sum(ord(ch) for ch in seed_text)
     suffix = SKILL_SUFFIXES[seed_value % len(SKILL_SUFFIXES)]
     brand_prefix = HAKIMI_BRAND_WORDS[seed_value % len(HAKIMI_BRAND_WORDS)]
     name = f"{brand_prefix}{seed_text}{suffix}"
-    
+
     rarity = "N"
     if score >= 90:
         rarity = "SSR"
@@ -714,7 +788,7 @@ def build_feed_skill(title: str, tags: list[str], score: int = 70) -> dict[str, 
         rarity = "SR"
     elif score >= 70:
         rarity = "R"
-        
+
     return {"name": name, "rarity": rarity}
 
 
@@ -738,11 +812,18 @@ def generate_initial_cat_ai_data(
 ) -> dict[str, Any]:
     selected_breed = breed.strip() or "初始动漫猫"
     selected_color = color.strip() or "奶油白"
-    default_prompt = build_initial_adoption_prompt(username, selected_breed, selected_color)
+    default_prompt = build_initial_adoption_prompt(
+        username, selected_breed, selected_color
+    )
     config2 = build_model_config(settings, 2)
     system_prompt2 = (
         "你是猫咪图鉴设定师。请为一个新领养的动漫猫生成初始人设。"
-        + build_miaomiao_setting(username=username, breed=selected_breed, color=selected_color, stage="初始领养")
+        + build_miaomiao_setting(
+            username=username,
+            breed=selected_breed,
+            color=selected_color,
+            stage="初始领养",
+        )
         + " "
         "只返回 JSON，不要输出额外说明。"
     )
@@ -755,17 +836,26 @@ def generate_initial_cat_ai_data(
         "请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
-    raw2 = AIModelRuntime.complete_text(config2, system_prompt2, user_prompt2, temperature=0.9)
+    raw2 = AIModelRuntime.complete_text(
+        config2, system_prompt2, user_prompt2, temperature=0.9
+    )
     data2 = json_repair.loads(raw2)
     profile = {
         "name": str(data2.get("name") or f"{username}的小猫"),
         "breed": str(data2.get("breed") or selected_breed),
         "skill": str(data2.get("skill") or "卖萌"),
         "power": str(data2.get("power") or "50"),
-        "personality": str(data2.get("personality") or "亲人、好奇、会悄悄观察主人的心情，偶尔嘴硬心软。"),
-        "story": str(data2.get("story") or f"这是 {username} 领养的第一只{selected_color}{selected_breed}，它正在学着成为最懂主人的小猫。"),
+        "personality": str(
+            data2.get("personality")
+            or "亲人、好奇、会悄悄观察主人的心情，偶尔嘴硬心软。"
+        ),
+        "story": str(
+            data2.get("story")
+            or f"这是 {username} 领养的第一只{selected_color}{selected_breed}，它正在学着成为最懂主人的小猫。"
+        ),
         "appearance": str(
-            data2.get("appearance") or f"一只{selected_color}的{selected_breed}，可爱的二次元小猫，大眼睛，毛茸茸，神情亲近又机灵。"
+            data2.get("appearance")
+            or f"一只{selected_color}的{selected_breed}，可爱的二次元小猫，大眼睛，毛茸茸，神情亲近又机灵。"
         ),
         "rarity": str(data2.get("rarity") or "N"),
         "image_prompt": str(data2.get("image_prompt") or default_prompt),
@@ -773,7 +863,9 @@ def generate_initial_cat_ai_data(
 
     final_image_url = ""
     try:
-        image_result = generate_cat_image_with_model3(settings, profile["name"], profile["story"], profile)
+        image_result = generate_cat_image_with_model3(
+            settings, profile["name"], profile["story"], profile
+        )
         final_image_url = image_result["url"]
         profile["image_prompt"] = image_result.get("prompt") or profile["image_prompt"]
     except Exception:
@@ -794,7 +886,9 @@ def generate_final_cat_persona(
     config = build_model_config(settings, 2)
     system_prompt = (
         "你是猫咪图鉴设定师。请根据猫咪成长过程中吸收的视频内容摘要，"
-        "生成它的“进阶/终局”形态设定。猫咪名字叫 " + cat_name + "。"
+        "生成它的“进阶/终局”形态设定。猫咪名字叫 "
+        + cat_name
+        + "。"
         + build_miaomiao_setting(stage="成长终局")
         + " "
         "只返回 JSON，不要输出额外说明。"
@@ -812,23 +906,34 @@ def generate_final_cat_persona(
         "\n请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
-    raw = AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.8)
+    raw = AIModelRuntime.complete_text(
+        config, system_prompt, user_prompt, temperature=0.8
+    )
     data = json_repair.loads(raw)
     profile = {
         "name": str(data.get("name") or cat_name),
         "breed": str(data.get("breed") or "进阶动漫猫"),
         "skill": str(data.get("skill") or "内容拟态"),
         "power": str(data.get("power") or "100"),
-        "personality": str(data.get("personality") or "更懂主人情绪，表达欲更强，温柔里带一点锋芒。"),
-        "story": str(data.get("story") or "在主人的陪伴和一次次喂养中，它长成了真正有故事的猫。"),
-        "appearance": str(data.get("appearance") or "更加精致成熟的形象，既保留亲近感，也带有成长后的独特气场。"),
+        "personality": str(
+            data.get("personality") or "更懂主人情绪，表达欲更强，温柔里带一点锋芒。"
+        ),
+        "story": str(
+            data.get("story") or "在主人的陪伴和一次次喂养中，它长成了真正有故事的猫。"
+        ),
+        "appearance": str(
+            data.get("appearance")
+            or "更加精致成熟的形象，既保留亲近感，也带有成长后的独特气场。"
+        ),
         "rarity": str(data.get("rarity") or "SR"),
         "image_prompt": str(data.get("image_prompt") or ""),
     }
     return {"profile": profile, "raw": raw}
 
 
-def build_growth_image_profile(cat: dict[str, Any], feed_result: dict[str, Any]) -> dict[str, str]:
+def build_growth_image_profile(
+    cat: dict[str, Any], feed_result: dict[str, Any]
+) -> dict[str, str]:
     learned_skill_raw = str(feed_result.get("learned_skill") or "").strip()
     learned_skill_name = "内容拟态"
     learned_skill_rarity = "R"
@@ -893,9 +998,16 @@ def generate_cat_response(
     )
     # 限制上下文长度
     recent_messages = messages[-10:]
-    history = "\n".join([f"{'主人' if m['role'] == 'user' else '猫咪'}: {m['content']}" for m in recent_messages])
+    history = "\n".join(
+        [
+            f"{'主人' if m['role'] == 'user' else '猫咪'}: {m['content']}"
+            for m in recent_messages
+        ]
+    )
     user_prompt = f"对话记录：\n{history}\n\n主人最后说：{messages[-1]['content']}\n\n请回复主人："
-    return AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.9)
+    return AIModelRuntime.complete_text(
+        config, system_prompt, user_prompt, temperature=0.9
+    )
 
 
 def generate_cat_response_stream(
@@ -918,11 +1030,12 @@ def generate_cat_response_stream(
     )
     recent_messages = messages[-10:]
     history = "\n".join(
-        [f"{'主人' if m['role'] == 'user' else '猫咪'}: {m['content']}" for m in recent_messages]
+        [
+            f"{'主人' if m['role'] == 'user' else '猫咪'}: {m['content']}"
+            for m in recent_messages
+        ]
     )
-    user_prompt = (
-        f"对话记录：\n{history}\n\n主人最后说：{messages[-1]['content']}\n\n请回复主人："
-    )
+    user_prompt = f"对话记录：\n{history}\n\n主人最后说：{messages[-1]['content']}\n\n请回复主人："
     try:
         return AIModelRuntime.stream_text(
             config, system_prompt, user_prompt, temperature=0.9
@@ -973,7 +1086,9 @@ def generate_feed_commentary_with_model2(
         return fallback
 
 
-def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> dict[str, Any]:
+def parse_douyin_to_feed(
+    url: str, settings: dict[str, str] | None = None
+) -> dict[str, Any]:
     source_url = extract_first_url(url) or url.strip()
     if not is_douyin_url(source_url):
         raise ValueError("请输入抖音作品链接")
@@ -1017,12 +1132,13 @@ def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> di
         title = (item.get("desc") or f"抖音内容 {aweme_id}")[:120]
         author_name = deep_get(item, ["author", "nickname"], "未知作者")
         description = item.get("desc") or title
-        cover_url = (
-            deep_get(item, ["video", "cover", "url_list", 0], "")
-            or deep_get(item, ["images", 0, "url_list", 0], "")
+        cover_url = deep_get(item, ["video", "cover", "url_list", 0], "") or deep_get(
+            item, ["images", 0, "url_list", 0], ""
         )
         tags = [tag for tag in re.split(r"[#\s,，/]+", description) if tag][:8]
-        hot, rhythm, knowledge, resonance = score_from_text(title, author_name, aweme_id)
+        hot, rhythm, knowledge, resonance = score_from_text(
+            title, author_name, aweme_id
+        )
         structured = build_fallback_model1_analysis(
             title=title,
             description=description,

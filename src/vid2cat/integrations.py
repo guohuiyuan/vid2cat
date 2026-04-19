@@ -123,12 +123,16 @@ class AIModelRuntime:
         }
         chunks: list[str] = []
         with httpx.Client(timeout=120.0) as client:
-            with client.stream("POST", endpoint, headers=headers, json=payload) as response:
+            with client.stream(
+                "POST", endpoint, headers=headers, json=payload
+            ) as response:
                 response.raise_for_status()
                 for line in response.iter_lines():
                     if not line:
                         continue
-                    text_line = line.decode("utf-8") if isinstance(line, bytes) else str(line)
+                    text_line = (
+                        line.decode("utf-8") if isinstance(line, bytes) else str(line)
+                    )
                     if not text_line.startswith("data:"):
                         continue
                     payload_line = text_line[5:].strip()
@@ -291,9 +295,15 @@ class ImageHostScaffold:
         env = os.environ.copy()
         env.update(
             {
-                "GITEE_REPO": settings.get("gitee_repo", ImageHostScaffold.DEFAULTS["gitee_repo"]),
-                "GITEE_BRANCH": settings.get("gitee_branch", ImageHostScaffold.DEFAULTS["gitee_branch"]),
-                "GITEE_PATH": settings.get("gitee_path", ImageHostScaffold.DEFAULTS["gitee_path"]),
+                "GITEE_REPO": settings.get(
+                    "gitee_repo", ImageHostScaffold.DEFAULTS["gitee_repo"]
+                ),
+                "GITEE_BRANCH": settings.get(
+                    "gitee_branch", ImageHostScaffold.DEFAULTS["gitee_branch"]
+                ),
+                "GITEE_PATH": settings.get(
+                    "gitee_path", ImageHostScaffold.DEFAULTS["gitee_path"]
+                ),
                 "GITEE_TOKEN": settings.get("gitee_token", ""),
                 "GITEE_CUSTOM_URL": settings.get("gitee_custom_url", ""),
             }
@@ -319,7 +329,9 @@ class ImageHostScaffold:
     def upload_bytes(file_bytes: bytes, suffix: str, settings: dict[str, str]) -> str:
         temp_dir = ImageHostScaffold.PROJECT_ROOT / "data" / "image_host"
         temp_dir.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir=temp_dir) as handle:
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=suffix, dir=temp_dir
+        ) as handle:
             handle.write(file_bytes)
             temp_path = Path(handle.name)
         try:
@@ -328,12 +340,16 @@ class ImageHostScaffold:
             temp_path.unlink(missing_ok=True)
 
     @staticmethod
-    def upload_base64_image(b64_json: str, settings: dict[str, str], suffix: str = ".png") -> str:
+    def upload_base64_image(
+        b64_json: str, settings: dict[str, str], suffix: str = ".png"
+    ) -> str:
         file_bytes = base64.b64decode(b64_json)
         return ImageHostScaffold.upload_bytes(file_bytes, suffix, settings)
 
     @staticmethod
-    def mirror_remote_image(image_url: str, settings: dict[str, str], suffix: str = ".png") -> str:
+    def mirror_remote_image(
+        image_url: str, settings: dict[str, str], suffix: str = ".png"
+    ) -> str:
         with httpx.Client(timeout=120.0) as client:
             response = client.get(image_url)
             response.raise_for_status()

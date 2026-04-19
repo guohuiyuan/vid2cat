@@ -1362,8 +1362,7 @@ def cat_plaza_page(
     current_page = min(max(1, int(page)), total_pages)
     offset = (current_page - 1) * page_size
     public_cats = [
-        build_cat_card(row)
-        for row in list_public_cats(limit=page_size, offset=offset)
+        build_cat_card(row) for row in list_public_cats(limit=page_size, offset=offset)
     ]
     return templates.TemplateResponse(
         request=request,
@@ -1389,9 +1388,13 @@ def plaza_adopt(request: Request, cat_id: int = Form(...), page: int = Form(defa
     try:
         adopted = adopt_plaza_cat(cat_id, int(current_user["id"]))
     except Exception as exc:
-        return redirect_with_message("/plaza", error=str(exc), extra={"page": str(max(1, page))})
+        return redirect_with_message(
+            "/plaza", error=str(exc), extra={"page": str(max(1, page))}
+        )
     if not adopted:
-        return redirect_with_message("/plaza", error="领养失败", extra={"page": str(max(1, page))})
+        return redirect_with_message(
+            "/plaza", error="领养失败", extra={"page": str(max(1, page))}
+        )
     return redirect_with_message("/my-cat", message=f"已成功领养 {adopted['name']}")
 
 
@@ -1607,7 +1610,9 @@ def admin_dashboard(
     settings = get_settings()
     market_page_size = 18
     market_total_count = count_public_cats()
-    market_total_pages = max(1, (market_total_count + market_page_size - 1) // market_page_size)
+    market_total_pages = max(
+        1, (market_total_count + market_page_size - 1) // market_page_size
+    )
     current_market_page = min(max(1, int(market_page)), market_total_pages)
     market_offset = (current_market_page - 1) * market_page_size
     market_cats = [
