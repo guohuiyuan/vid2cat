@@ -50,6 +50,7 @@ from .db import (
     get_user_rating,
     init_db,
     list_cat_feed_records,
+    list_cat_evolution_snapshots,
     list_cat_timeline,
     list_cat_messages,
     list_public_cats,
@@ -60,6 +61,7 @@ from .db import (
     parse_skill_list,
     perform_daily_training,
     release_cat_to_plaza,
+    rollback_cat_to_snapshot,
     register_user,
     save_atlas,
     set_all_user_cats_inactive,
@@ -371,6 +373,7 @@ def build_current_cat_payload(cat: dict[str, Any]) -> dict[str, Any]:
         "latest_summary": str(cat.get("latest_summary") or ""),
         "highest_level_owner_name": str(cat.get("highest_level_owner_name") or ""),
         "highest_level_reached": int(cat.get("highest_level_reached") or 0),
+        "rollback_used": bool(int(cat.get("rollback_used") or 0)),
         "exp_progress": exp_progress,
         "skill_badges": build_skill_badges(cat),
         "feed_gate_hint": feed_gate_hint,
@@ -396,6 +399,7 @@ def build_cat_sync_payload(user_id: int, cat: dict[str, Any]) -> dict[str, Any]:
         if latest_feed_event
         else None
     )
+    payload["evolution_history"] = build_evolution_history(cat, limit=10)
     return payload
 
 
@@ -451,6 +455,69 @@ def build_feed_growth_summary(event_data: dict[str, Any]) -> str:
     if commentary:
         return f"{skill_text} | {growth_text} | {commentary}"
     return f"{skill_text} | {growth_text}"
+
+
+def build_evolution_history(cat: dict[str, Any], limit: int = 10) -> list[dict[str, Any]]:
+    snapshots = list_cat_evolution_snapshots(int(cat["id"]), limit=limit)
+    feed_records = list_cat_feed_records(int(cat["id"]), limit=limit)
+    feed_map = {int(row.get("feed_index") or 0): row for row in feed_records}
+    current_feed_count = int(cat.get("feed_count") or 0)
+    rollback_used = bool(int(cat.get("rollback_used") or 0))
+    history: list[dict[str, Any]] = []
+
+    for snapshot in snapshots:
+        snapshot_index = int(snapshot.get("snapshot_index") or 0)
+        matched_feed = feed_map.get(snapshot_index)
+        try:
+            snapshot_payload = json.loads(str(snapshot.get("snapshot_json") or "{}"))
+        except Exception:
+            snapshot_payload = {}
+        if not isinstance(snapshot_payload, dict):
+            snapshot_payload = {}
+        level_before = int(snapshot.get("level_before") or 0)
+        feed_count_before = int(snapshot.get("feed_count_before") or 0)
+        is_current_state = rollback_used and feed_count_before == current_feed_count
+        if matched_feed:
+            detail = (
+                f"随后通过《{matched_feed.get('video_title') or '未命名视频'}》完成第 {snapshot_index} 次进化。"
+            )
+            growth = build_feed_growth_summary(matched_feed)
+        elif is_current_state:
+            detail = "当前正停留在这个回退后的版本。"
+            growth = "已恢复到该备份对应的猫咪状态。"
+        else:
+            detail = "这是一次尚未完成的进化前备份。"
+            growth = "可在需要时回退到这里。"
+        history.append(
+            {
+                "snapshot_id": int(snapshot.get("id") or 0),
+                "snapshot_index": snapshot_index,
+                "label": str(snapshot.get("snapshot_label") or f"第 {snapshot_index} 次进化前备份"),
+                "created_at": str(snapshot.get("created_at") or ""),
+                "cat_name": str(snapshot_payload.get("name") or cat.get("name") or "未命名猫咪"),
+                "cat_stage": str(snapshot_payload.get("stage") or "初始态"),
+                "image_url": str(snapshot_payload.get("image_url") or ""),
+                "level_before": level_before,
+                "feed_count_before": feed_count_before,
+                "video_title": str(
+                    (matched_feed or {}).get("video_title")
+                    or snapshot.get("trigger_video_title")
+                    or ""
+                ),
+                "video_url": str(
+                    (matched_feed or {}).get("canonical_url")
+                    or (matched_feed or {}).get("source_url")
+                    or snapshot.get("trigger_source_url")
+                    or ""
+                ),
+                "video_summary": str((matched_feed or {}).get("video_summary") or ""),
+                "summary": detail,
+                "growth_summary": growth,
+                "can_rollback": not rollback_used,
+                "is_current_state": is_current_state,
+            }
+        )
+    return history
 
 
 def ensure_share_card_access(
@@ -996,6 +1063,8 @@ def my_cat_page(
             "stat_cards": build_cat_stat_cards(cat) if cat else [],
             "timeline_events": timeline_events,
             "chat_history": merged_chat,
+            "evolution_history": build_evolution_history(cat, limit=10) if cat else [],
+            "rollback_used": bool(cat) and bool(int(cat.get("rollback_used") or 0)),
             "stage_hint": (
                 build_cat_stage_hint(cat)
                 if cat
@@ -1227,6 +1296,43 @@ def current_cat_state(request: Request):
     if not cat:
         raise HTTPException(status_code=404, detail="当前没有猫咪")
     return JSONResponse(build_cat_sync_payload(int(current_user["id"]), cat))
+
+
+@app.post("/my-cat/rollback")
+def my_cat_rollback(request: Request, snapshot_id: int = Form(...)):
+    current_user = get_or_create_session_user(request)
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        return redirect_with_message("/my-cat", error="当前没有可回退的猫咪")
+    if int(cat.get("rollback_used") or 0) == 1:
+        return redirect_with_message("/my-cat", error="这只猫的回退机会已经使用过了")
+    try:
+        restored_cat = rollback_cat_to_snapshot(int(cat["id"]), int(snapshot_id))
+    except Exception as exc:
+        return redirect_with_message("/my-cat", error=str(exc))
+    return redirect_with_message(
+        "/my-cat",
+        message=f"{restored_cat.get('name') or '猫咪'} 已回退到之前的进化版本",
+    )
+
+
+@app.post("/api/my-cat/rollback")
+def api_my_cat_rollback(request: Request, snapshot_id: int = Form(...)):
+    current_user = get_or_create_session_user(request)
+    cat = get_or_activate_user_cat(int(current_user["id"]))
+    if not cat:
+        raise HTTPException(status_code=400, detail="当前没有可回退的猫咪")
+    if int(cat.get("rollback_used") or 0) == 1:
+        raise HTTPException(status_code=400, detail="这只猫的回退机会已经使用过了")
+    try:
+        restored_cat = rollback_cat_to_snapshot(int(cat["id"]), int(snapshot_id))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    
+    return JSONResponse({
+        "message": f"{restored_cat.get('name') or '猫咪'} 已回退到之前的进化版本",
+        "cat": build_cat_sync_payload(int(current_user["id"]), restored_cat)
+    })
 
 
 @app.post("/api/my-cat/adopt")

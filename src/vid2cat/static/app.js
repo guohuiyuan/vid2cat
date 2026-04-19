@@ -30,8 +30,13 @@ document.addEventListener("DOMContentLoaded", () => {
     const adoptionLoadingGrid = document.getElementById("adoption-loading-grid");
     const ownedCatsGrid = document.getElementById("owned-cats-grid");
     const emptyOwnedCats = document.getElementById("empty-owned-cats");
+    const evolutionHistoryList = document.getElementById("evolution-history-list");
+    const rollbackStatusPill = document.getElementById("rollback-status-pill");
     const trainingButtons = document.querySelectorAll(".training-action-btn");
     const douyinPattern = /(douyin\.com|iesdouyin\.com|v\.douyin\.com)/i;
+
+    const evolutionDetailDialog = document.getElementById("evolution-detail-dialog");
+    const closeEvolutionDetailButtons = document.querySelectorAll("[data-close-evolution-detail]");
 
     let activeTaskId = null;
     let activeAdoptionTaskId = null;
@@ -71,7 +76,7 @@ document.addEventListener("DOMContentLoaded", () => {
     scrollChatToBottom();
 
     const updateDialogBodyState = () => {
-        const hasVisibleDialog = [authDialog, adoptionDialog, growthGuideDialog, imagePreviewDialog, loadingOverlay].some(
+        const hasVisibleDialog = [authDialog, adoptionDialog, growthGuideDialog, imagePreviewDialog, loadingOverlay, evolutionDetailDialog].some(
             (dialog) => dialog && !dialog.classList.contains("hidden"),
         );
         document.body.classList.toggle("dialog-open", hasVisibleDialog);
@@ -176,6 +181,74 @@ document.addEventListener("DOMContentLoaded", () => {
         updateDialogBodyState();
     };
 
+    const openEvolutionDetail = (btn) => {
+        if (!evolutionDetailDialog) return;
+        const ds = btn.dataset;
+
+        document.getElementById("evo-detail-title").textContent = ds.label || "进化详情";
+        document.getElementById("evo-detail-subtitle").textContent = `${ds.catName || "未命名猫咪"} · ${ds.catStage || "初始态"}`;
+
+        const imgEl = document.getElementById("evo-detail-image");
+        const placeholderEl = document.getElementById("evo-detail-placeholder");
+        if (ds.imageUrl) {
+            imgEl.src = ds.imageUrl;
+            imgEl.classList.remove("hidden");
+            placeholderEl.classList.add("hidden");
+        } else {
+            imgEl.src = "";
+            imgEl.classList.add("hidden");
+            placeholderEl.textContent = (ds.catName || "猫").slice(0, 1);
+            placeholderEl.classList.remove("hidden");
+        }
+
+        document.getElementById("evo-detail-summary").textContent = ds.summary || "";
+        document.getElementById("evo-detail-level").textContent = `回退后等级 Lv.${ds.level || 0}`;
+        document.getElementById("evo-detail-feed").textContent = `回退后喂养 ${ds.feedCount || 0}/${ds.maxFeed || 6}`;
+
+        const videoRow = document.getElementById("evo-detail-video-row");
+        const videoLink = document.getElementById("evo-detail-video-link");
+        const videoText = document.getElementById("evo-detail-video-text");
+        if (ds.videoTitle) {
+            videoRow.classList.remove("hidden");
+            if (ds.videoUrl) {
+                videoLink.href = ds.videoUrl;
+                videoLink.textContent = `打开《${ds.videoTitle}》`;
+                videoLink.classList.remove("hidden");
+                videoText.classList.add("hidden");
+            } else {
+                videoText.textContent = ds.videoTitle;
+                videoText.classList.remove("hidden");
+                videoLink.classList.add("hidden");
+            }
+        } else {
+            videoRow.classList.add("hidden");
+        }
+
+        document.getElementById("evo-detail-growth").textContent = ds.growthSummary || "";
+
+        const formEl = document.getElementById("evo-detail-rollback-form");
+        const disabledBtn = document.getElementById("evo-detail-disabled-btn");
+        if (ds.canRollback === "true") {
+            document.getElementById("evo-detail-snapshot-id").value = ds.snapshotId;
+            formEl.classList.remove("hidden");
+            disabledBtn.classList.add("hidden");
+        } else {
+            formEl.classList.add("hidden");
+            disabledBtn.classList.remove("hidden");
+        }
+
+        evolutionDetailDialog.classList.remove("hidden");
+        evolutionDetailDialog.setAttribute("aria-hidden", "false");
+        updateDialogBodyState();
+    };
+
+    const closeEvolutionDetail = () => {
+        if (!evolutionDetailDialog) return;
+        evolutionDetailDialog.classList.add("hidden");
+        evolutionDetailDialog.setAttribute("aria-hidden", "true");
+        updateDialogBodyState();
+    };
+
     authOpenButtons.forEach((button) => {
         button.addEventListener("click", () => {
             openAuthDialog(button.dataset.openAuth || "login");
@@ -202,6 +275,64 @@ document.addEventListener("DOMContentLoaded", () => {
 
     growthGuideCloseButtons.forEach((button) => {
         button.addEventListener("click", closeGrowthGuideDialog);
+    });
+
+    document.body.addEventListener("click", (event) => {
+        const btn = event.target.closest("[data-open-evolution-detail]");
+        if (btn) {
+            openEvolutionDetail(btn);
+        }
+    });
+
+    document.body.addEventListener("submit", async (event) => {
+        if (event.target.classList.contains("release-form")) {
+            if (!window.confirm("确定要把它放入猫咪市场吗？\n放入后其他用户可能会领养走。")) {
+                event.preventDefault();
+            }
+            return;
+        }
+        if (event.target.classList.contains("market-adopt-form")) {
+            if (!window.confirm("确定要领养这只猫咪吗？\n领养后会占用一个名额（最多 3 只）。")) {
+                event.preventDefault();
+            }
+            return;
+        }
+        if (event.target.classList.contains("rollback-form") || event.target.id === "evo-detail-rollback-form") {
+            event.preventDefault();
+            if (!window.confirm("确定要回退到这个版本吗？\n注意：此操作将丢失该版本之后的所有喂养和成长记录，且每只猫咪仅有 1 次回退机会。")) {
+                return;
+            }
+
+            const form = event.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            const originalText = submitBtn.textContent;
+            submitBtn.textContent = "回退中...";
+            submitBtn.disabled = true;
+
+            try {
+                const formData = new FormData(form);
+                const response = await fetch('/api/my-cat/rollback', {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const payload = await response.json();
+                if (!response.ok) {
+                    throw new Error(payload.detail || "回退失败");
+                }
+
+                // 回退完成后刷新页面，以展示最新的进化历程
+                window.location.reload();
+            } catch (error) {
+                window.alert(error.message);
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+    });
+
+    closeEvolutionDetailButtons.forEach((button) => {
+        button.addEventListener("click", closeEvolutionDetail);
     });
 
     const previewUploadedCard = async (button) => {
@@ -280,6 +411,9 @@ document.addEventListener("DOMContentLoaded", () => {
             const color = String(formData.get("color") || "").trim();
             if (!breed || !color) {
                 appendEventMessage("请先选择品种和颜色。", "error");
+                return;
+            }
+            if (!window.confirm("确定要领养这只猫咪吗？\n领养会占用一个名额（最多 3 只）。")) {
                 return;
             }
 
@@ -388,6 +522,7 @@ document.addEventListener("DOMContentLoaded", () => {
             closeAdoptionDialog();
             closeGrowthGuideDialog();
             closeImagePreview();
+            closeEvolutionDetail();
         }
     });
 
@@ -557,6 +692,76 @@ document.addEventListener("DOMContentLoaded", () => {
             .join("");
     };
 
+    const escapeHtml = (value) =>
+        String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+
+    const renderEvolutionHistory = (history, cat) => {
+        if (!evolutionHistoryList || !cat) return;
+        if (!Array.isArray(history) || history.length === 0) {
+            evolutionHistoryList.innerHTML =
+                '<div class="empty-state compact">还没有产生进化备份。先把经验条练满，再喂第一个视频生成历程记录。</div>';
+        } else {
+            evolutionHistoryList.innerHTML = history
+                .map((item) => {
+                    const imageHtml = item.image_url
+                        ? `<img src="${escapeHtml(item.image_url)}" alt="${escapeHtml(item.cat_name || "猫咪")}">`
+                        : `<div class="evolution-history-placeholder">${escapeHtml((item.cat_name || "猫").slice(0, 1))}</div>`;
+                    const actionHtml = item.can_rollback
+                        ? `<form action="/my-cat/rollback" method="POST">
+                                <input type="hidden" name="snapshot_id" value="${Number(item.snapshot_id || 0)}">
+                                <button type="submit" class="ghost-btn compact-btn">回退</button>
+                           </form>`
+                        : '<span class="ghost-btn compact-btn disabled">已使用</span>';
+
+                    return `<article class="evolution-history-card" data-evolution-snapshot-id="${Number(item.snapshot_id || 0)}">
+                        <div class="evolution-history-media">${imageHtml}</div>
+                        <div class="evolution-history-body">
+                            <div class="evolution-history-header">
+                                <div>
+                                    <strong>${escapeHtml(item.label || "进化前备份")}</strong>
+                                    <p class="evolution-history-name">${escapeHtml(item.cat_name || "未命名猫咪")} · ${escapeHtml(item.cat_stage || "初始态")}</p>
+                                </div>
+                                ${item.is_current_state ? '<span class="pill active">当前版本</span>' : ""}
+                            </div>
+                            <div class="action-row evolution-history-actions">
+                                <button type="button" class="ghost-btn compact-btn" 
+                                    data-open-evolution-detail
+                                    data-label="${escapeHtml(item.label || '')}"
+                                    data-cat-name="${escapeHtml(item.cat_name || '')}"
+                                    data-cat-stage="${escapeHtml(item.cat_stage || '')}"
+                                    data-image-url="${escapeHtml(item.image_url || '')}"
+                                    data-summary="${escapeHtml(item.summary || '')}"
+                                    data-level="${Number(item.level_before || 0)}"
+                                    data-feed-count="${Number(item.feed_count_before || 0)}"
+                                    data-max-feed="${Number(cat.max_feed_count || 6)}"
+                                    data-video-title="${escapeHtml(item.video_title || '')}"
+                                    data-video-url="${escapeHtml(item.video_url || '')}"
+                                    data-growth-summary="${escapeHtml(item.growth_summary || '')}"
+                                    data-can-rollback="${item.can_rollback ? 'true' : 'false'}"
+                                    data-snapshot-id="${Number(item.snapshot_id || 0)}"
+                                    data-is-current="${item.is_current_state ? 'true' : 'false'}">
+                                    详情
+                                </button>
+                                ${actionHtml}
+                            </div>
+                        </div>
+                    </article>`;
+                })
+                .join("");
+        }
+
+        if (rollbackStatusPill) {
+            const rollbackUsed = !!cat.rollback_used;
+            rollbackStatusPill.textContent = rollbackUsed ? "回退机会已使用" : "可回退 1 次";
+            rollbackStatusPill.className = `pill ${rollbackUsed ? "muted" : "active"}`;
+        }
+    };
+
     const refreshOwnedCards = (ownedCats) => {
         if (!Array.isArray(ownedCats) || ownedCats.length === 0) {
             return;
@@ -712,8 +917,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 cat.exp_progress.exp_to_next <= 0
                     ? "满级完成"
                     : cat.can_feed
-                      ? "已充满"
-                      : `还差 ${cat.exp_progress.remaining}`;
+                        ? "已充满"
+                        : `还差 ${cat.exp_progress.remaining}`;
         }
 
         const skillContainer = document.getElementById("cat-skill-badges");
@@ -747,6 +952,7 @@ document.addEventListener("DOMContentLoaded", () => {
             publishButton.classList.toggle("hidden-state", !cat.is_public);
         }
 
+        renderEvolutionHistory(cat.evolution_history, cat);
         refreshOwnedCards(cat.owned_cats);
         updateInteractionUi();
         return cat;

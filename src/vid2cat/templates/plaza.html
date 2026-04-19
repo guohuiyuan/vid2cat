@@ -35,7 +35,8 @@
                 <div class="market-card-header">
                     <div>
                         <h3 class="cat-name">{{ card.cat_name }}</h3>
-                        <p class="market-owner">最高级原主人：@{{ card.highest_level_owner_name }}（{{ card.highest_level_reached }} 级）</p>
+                        <p class="market-owner">最高级原主人：@{{ card.highest_level_owner_name }}（{{
+                            card.highest_level_reached }} 级）</p>
                     </div>
                     <span class="pill muted">{{ card.stage }}</span>
                 </div>
@@ -55,7 +56,7 @@
                 </div>
 
                 {% if card.available_for_adoption and current_user %}
-                <form action="/plaza/adopt" method="POST" class="market-card-action">
+                <form action="/plaza/adopt" method="POST" class="market-card-action market-adopt-form">
                     <input type="hidden" name="cat_id" value="{{ card.id }}">
                     <input type="hidden" name="page" value="{{ page }}">
                     <button type="submit" class="primary-btn full-width">领养这只猫</button>
@@ -64,17 +65,13 @@
                 <div class="inline-warning">登录后才能领养市场中的猫咪。</div>
                 {% endif %}
                 <div class="action-row">
-                    <button
-                        type="button"
-                        class="ghost-btn full-width anchor-btn"
-                        data-preview-image="/cats/{{ card.id }}/share-card.png"
-                        data-preview-cat-id="{{ card.id }}"
-                        data-preview-cat-name="{{ card.cat_name }}"
-                        aria-label="预览 {{ card.cat_name }} 的分享卡"
-                    >
+                    <button type="button" class="ghost-btn full-width anchor-btn"
+                        data-preview-image="/cats/{{ card.id }}/share-card.png" data-preview-cat-id="{{ card.id }}"
+                        data-preview-cat-name="{{ card.cat_name }}" aria-label="预览 {{ card.cat_name }} 的分享卡">
                         预览卡
                     </button>
-                    <button type="button" class="ghost-btn full-width anchor-btn share-card-btn" data-share-card-id="{{ card.id }}" data-share-card-name="{{ card.cat_name }}">分享卡</button>
+                    <button type="button" class="ghost-btn full-width anchor-btn share-card-btn"
+                        data-share-card-id="{{ card.id }}" data-share-card-name="{{ card.cat_name }}">分享卡</button>
                 </div>
             </div>
         </article>
@@ -91,11 +88,10 @@
 
         <span class="pagination-summary">第 {{ page }} / {{ total_pages }} 页</span>
 
-        {% if page < total_pages %}
-        <a class="ghost-btn anchor-btn" href="/plaza?page={{ page + 1 }}">下一页</a>
-        {% else %}
-        <span class="ghost-btn disabled">下一页</span>
-        {% endif %}
+        {% if page < total_pages %} <a class="ghost-btn anchor-btn" href="/plaza?page={{ page + 1 }}">下一页</a>
+            {% else %}
+            <span class="ghost-btn disabled">下一页</span>
+            {% endif %}
     </nav>
     {% endif %}
     {% else %}
@@ -105,7 +101,8 @@
     </div>
     {% endif %}
 
-    <div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="分享卡预览">
+    <div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true"
+        aria-label="分享卡预览">
         <div class="dialog-backdrop" data-close-preview></div>
         <div class="unified-dialog-card image-preview-dialog">
             <div class="dialog-header">
@@ -113,7 +110,8 @@
                     <h3>分享卡预览</h3>
                     <span class="section-hint">已走图床地址，浮动预览</span>
                 </div>
-                <button type="button" class="ghost-btn dialog-close-btn" data-close-preview aria-label="关闭预览">&times;</button>
+                <button type="button" class="ghost-btn dialog-close-btn" data-close-preview
+                    aria-label="关闭预览">&times;</button>
             </div>
             <div class="image-preview-body">
                 <img id="image-preview-target" src="" alt="猫咪分享卡预览图">

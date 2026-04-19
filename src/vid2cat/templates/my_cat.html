@@ -11,423 +11,528 @@
     <div class="notice error">{{ error }}</div>
     {% endif %}
 
-        <section class="content-card">
-            <div class="section-title-row">
-                <div>
-                    <h2>我的哈基米</h2>
-                    <span class="section-hint">最多拥有 3 只，当前 {{ owned_count }}/3，点击卡片即可切换当前陪伴中的猫咪</span>
-                </div>
-                {% if can_adopt_new %}
-                <button type="button" class="ghost-btn anchor-btn" data-open-adoption>
-                    {{ "完成首次领养" if needs_initial_adoption else "再领养一只" }}
-                </button>
-                {% endif %}
+    <section class="content-card">
+        <div class="section-title-row">
+            <div>
+                <h2>我的哈基米</h2>
+                <span class="section-hint">最多拥有 3 只，当前 {{ owned_count }}/3，点击卡片即可切换当前陪伴中的猫咪</span>
             </div>
-
-            {% if owned_cats %}
-            <div id="owned-cats-grid" class="cat-switcher-grid">
-                {% for owned in owned_cats %}
-                <article class="cat-switch-card{% if owned.is_active %} active{% endif %}" data-owned-cat-id="{{ owned.id }}">
-                    <div class="cat-switch-thumb">
-                        {% if owned.image_url %}
-                        <img class="owned-cat-image" src="{{ owned.image_url }}" alt="{{ owned.cat_name }}">
-                        {% else %}
-                        <div class="cat-switch-placeholder owned-cat-placeholder">{{ owned.cat_name[:1] }}</div>
-                        {% endif %}
-                    </div>
-                    <div class="cat-switch-body">
-                        <div class="cat-switch-top">
-                            <h3 class="owned-cat-name">{{ owned.cat_name }}</h3>
-                            <span class="pill muted owned-cat-stage">{{ owned.stage }}</span>
-                        </div>
-                        <div class="pill-row compact">
-                            <span class="pill muted owned-cat-level">Lv.{{ owned.level }}</span>
-                            <span class="pill muted owned-cat-feed">喂养 {{ owned.feed_count }}/{{ owned.max_feed_count }}</span>
-                            <span class="pill muted owned-cat-power">总属性 {{ owned.overall_power }}</span>
-                        </div>
-                    </div>
-                    <div class="cat-switch-actions">
-                        {% if owned.is_active %}
-                        <span class="pill active">当前陪伴中</span>
-                        {% else %}
-                        <form action="/my-cat/switch" method="POST">
-                            <input type="hidden" name="cat_id" value="{{ owned.id }}">
-                            <button type="submit" class="ghost-btn">切换到这只</button>
-                        </form>
-                        {% endif %}
-                        <button
-                            type="button"
-                            class="ghost-btn"
-                            data-preview-image="/cats/{{ owned.id }}/share-card.png"
-                            data-preview-cat-id="{{ owned.id }}"
-                            data-preview-cat-name="{{ owned.cat_name }}"
-                            aria-label="预览 {{ owned.cat_name }} 的分享卡"
-                        >
-                            预览卡
-                        </button>
-                        <button type="button" class="ghost-btn share-card-btn" data-share-card-id="{{ owned.id }}" data-share-card-name="{{ owned.cat_name }}">分享卡</button>
-                    </div>
-                </article>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div id="empty-owned-cats" class="empty-state compact">
-                你还没有领养任何猫咪。先选一只喜欢的品种和颜色，完成第一次领养。
-            </div>
+            {% if can_adopt_new %}
+            <button type="button" class="ghost-btn anchor-btn" data-open-adoption>
+                {{ "完成首次领养" if needs_initial_adoption else "再领养一只" }}
+            </button>
             {% endif %}
-            <div id="adoption-loading-grid" class="cat-switcher-grid hidden" aria-live="polite">
-                <article id="adoption-loading-card" class="cat-switch-card cat-switch-card-loading" aria-label="新猫咪正在生成中">
-                    <div class="cat-switch-thumb skeleton-box"></div>
-                    <div class="cat-switch-body">
-                        <div class="cat-switch-top">
-                            <h3>新猫咪生成中...</h3>
-                            <span class="pill muted">准备中</span>
-                        </div>
-                        <div class="pill-row compact">
-                            <span class="pill muted">正在匹配品种</span>
-                            <span class="pill muted">正在生成形象</span>
-                        </div>
-                    </div>
-                </article>
-            </div>
-        </section>
+        </div>
 
-        {% if cat %}
-        <section class="dashboard-grid cat-dashboard">
-            <div class="content-card">
-                <div class="section-title-row">
-                    <div>
-                        <h2>{{ cat.name }}</h2>
-                        <span class="section-hint">{{ stage_hint }}</span>
+        {% if owned_cats %}
+        <div id="owned-cats-grid" class="cat-switcher-grid">
+            {% for owned in owned_cats %}
+            <article class="cat-switch-card{% if owned.is_active %} active{% endif %}"
+                data-owned-cat-id="{{ owned.id }}">
+                <div class="cat-switch-thumb">
+                    {% if owned.image_url %}
+                    <img class="owned-cat-image" src="{{ owned.image_url }}" alt="{{ owned.cat_name }}">
+                    {% else %}
+                    <div class="cat-switch-placeholder owned-cat-placeholder">{{ owned.cat_name[:1] }}</div>
+                    {% endif %}
+                </div>
+                <div class="cat-switch-body">
+                    <div class="cat-switch-top">
+                        <h3 class="owned-cat-name">{{ owned.cat_name }}</h3>
+                        <span class="pill muted owned-cat-stage">{{ owned.stage }}</span>
                     </div>
                     <div class="pill-row compact">
-                        <span class="pill">编号：{{ cat.cat_no }}</span>
-                        <span id="cat-level-pill" class="pill muted">等级：{{ exp_progress.level }}/6</span>
-                        <span id="cat-stage-pill" class="pill muted">阶段：{{ cat.stage }}</span>
-                        <span id="cat-remaining-feed-pill" class="pill muted">剩余喂养 {{ remaining_feeds }} 次</span>
+                        <span class="pill muted owned-cat-level">Lv.{{ owned.level }}</span>
+                        <span class="pill muted owned-cat-feed">喂养 {{ owned.feed_count }}/{{ owned.max_feed_count
+                            }}</span>
+                        <span class="pill muted owned-cat-power">总属性 {{ owned.overall_power }}</span>
+                    </div>
+                </div>
+                <div class="cat-switch-actions">
+                    {% if owned.is_active %}
+                    <span class="pill active">当前陪伴中</span>
+                    {% else %}
+                    <form action="/my-cat/switch" method="POST">
+                        <input type="hidden" name="cat_id" value="{{ owned.id }}">
+                        <button type="submit" class="ghost-btn">切换到这只</button>
+                    </form>
+                    {% endif %}
+                    <button type="button" class="ghost-btn" data-preview-image="/cats/{{ owned.id }}/share-card.png"
+                        data-preview-cat-id="{{ owned.id }}" data-preview-cat-name="{{ owned.cat_name }}"
+                        aria-label="预览 {{ owned.cat_name }} 的分享卡">
+                        预览卡
+                    </button>
+                    <button type="button" class="ghost-btn share-card-btn" data-share-card-id="{{ owned.id }}"
+                        data-share-card-name="{{ owned.cat_name }}">分享卡</button>
+                </div>
+            </article>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div id="empty-owned-cats" class="empty-state compact">
+            你还没有领养任何猫咪。先选一只喜欢的品种和颜色，完成第一次领养。
+        </div>
+        {% endif %}
+        <div id="adoption-loading-grid" class="cat-switcher-grid hidden" aria-live="polite">
+            <article id="adoption-loading-card" class="cat-switch-card cat-switch-card-loading" aria-label="新猫咪正在生成中">
+                <div class="cat-switch-thumb skeleton-box"></div>
+                <div class="cat-switch-body">
+                    <div class="cat-switch-top">
+                        <h3>新猫咪生成中...</h3>
+                        <span class="pill muted">准备中</span>
+                    </div>
+                    <div class="pill-row compact">
+                        <span class="pill muted">正在匹配品种</span>
+                        <span class="pill muted">正在生成形象</span>
+                    </div>
+                </div>
+            </article>
+        </div>
+    </section>
+
+    {% if cat %}
+    <section class="dashboard-grid cat-dashboard">
+        <div class="content-card">
+            <div class="section-title-row">
+                <div>
+                    <h2>{{ cat.name }}</h2>
+                    <span class="section-hint">{{ stage_hint }}</span>
+                </div>
+                <div class="pill-row compact">
+                    <span class="pill">编号：{{ cat.cat_no }}</span>
+                    <span id="cat-level-pill" class="pill muted">等级：{{ exp_progress.level }}/6</span>
+                    <span id="cat-stage-pill" class="pill muted">阶段：{{ cat.stage }}</span>
+                    <span id="cat-remaining-feed-pill" class="pill muted">剩余喂养 {{ remaining_feeds }} 次</span>
+                    {% if cat.image_url %}
+                    <form id="publish-toggle-form" action="/my-cat/publish" method="POST">
+                        <input id="publish-toggle-input" type="hidden" name="is_public"
+                            value="{{ 0 if cat.is_public else 1 }}">
+                        <button id="publish-toggle-button" type="submit"
+                            class="publish-toggle-btn{% if cat.is_public %} published{% else %} hidden-state{% endif %}">
+                            {{ "隐藏" if cat.is_public else "发布" }}
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="page-subnav">
+                <a class="ghost-btn compact-btn anchor-btn" href="#chat-section">对话与喂养</a>
+                <a class="ghost-btn compact-btn anchor-btn" href="#evolution-section">进化历程</a>
+            </div>
+
+            <div class="cat-stage-layout">
+                <div class="cat-stage-side">
+                    <div id="cat-avatar-card" class="cat-avatar-card" data-cat-name="{{ cat.name }}">
                         {% if cat.image_url %}
-                        <form id="publish-toggle-form" action="/my-cat/publish" method="POST">
-                            <input id="publish-toggle-input" type="hidden" name="is_public" value="{{ 0 if cat.is_public else 1 }}">
-                            <button id="publish-toggle-button" type="submit" class="publish-toggle-btn{% if cat.is_public %} published{% else %} hidden-state{% endif %}">
-                                {{ "隐藏" if cat.is_public else "发布" }}
-                            </button>
-                        </form>
+                        <img id="cat-avatar-image" src="{{ cat.image_url }}" alt="{{ cat.name }}">
+                        {% else %}
+                        <div id="cat-avatar-placeholder" class="cat-avatar-placeholder">
+                            <span>{{ cat.name[:1] }}</span>
+                        </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="info-panel">
+                        <div class="stats-row stats-row-tight">
+                            <div class="stat-box">
+                                <span class="label">当前等级</span>
+                                <strong id="cat-level-value"
+                                    class="{% if exp_progress.level >= 6 %}limit-reached{% endif %}">
+                                    {{ exp_progress.level }}/6
+                                </strong>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">喂养次数</span>
+                                <strong id="cat-feed-count-value"
+                                    class="{% if cat.feed_count >= cat.max_feed_count %}limit-reached{% endif %}">
+                                    {{ cat.feed_count }}/{{ cat.max_feed_count }}
+                                </strong>
+                            </div>
+                            <div class="stat-box">
+                                <span class="label">总属性</span>
+                                <strong id="cat-overall-power">{{ cat.overall_power }}</strong>
+                            </div>
+                        </div>
+                        <div class="current-stats-panel">
+                            <div class="section-title-row compact-row">
+                                <h3>当前属性</h3>
+                                <span class="section-hint">修炼负责经验，喂养负责升级与技能突破</span>
+                            </div>
+                            <div class="profile-grid compact-profile-grid">
+                                {% for item in stat_cards %}
+                                <div class="profile-item">
+                                    <span>{{ item.label }}</span>
+                                    <strong id="cat-stat-{{ item.key }}">{{ item.value }}</strong>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="exp-panel">
+                            <div class="section-title-row compact-row">
+                                <div>
+                                    <h3>经验条</h3>
+                                    <span id="cat-exp-text" class="section-hint">
+                                        {% if exp_progress.exp_to_next > 0 %}
+                                        {{ exp_progress.exp }}/{{ exp_progress.exp_to_next }}
+                                        {% else %}
+                                        已满级
+                                        {% endif %}
+                                    </span>
+                                </div>
+                                {% if exp_progress.exp_to_next > 0 %}
+                                <span id="cat-exp-pill" class="pill{% if can_feed %} active{% else %} muted{% endif %}">
+                                    {% if can_feed %}已充满{% else %}还差 {{ exp_progress.remaining }}{% endif %}
+                                </span>
+                                {% else %}
+                                <span id="cat-exp-pill" class="pill active">满级完成</span>
+                                {% endif %}
+                            </div>
+                            <div class="exp-bar">
+                                <div id="cat-exp-fill" class="exp-bar-fill" style="width: {{ exp_progress.percent }}%;">
+                                </div>
+                            </div>
+                            <p id="cat-feed-gate-hint" class="exp-panel-copy">{{ feed_gate_hint }}</p>
+                        </div>
+                        <div class="skill-panel">
+                            <div class="section-title-row compact-row">
+                                <h3>已学会技能</h3>
+                                <span class="section-hint">每喂一个视频学会一个技能，最多 6 个</span>
+                            </div>
+                            {% if skill_badges %}
+                            <div id="cat-skill-badges" class="pill-row compact">
+                                {% for badge in skill_badges %}
+                                <span class="skill-badge {{ badge.class }}">
+                                    <span class="skill-rarity">{{ badge.rarity }}</span>
+                                    {{ badge.name }}
+                                </span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p id="cat-skill-badges">还没有学会技能，先把经验练满后喂第一个视频。</p>
+                            {% endif %}
+                        </div>
+                        <div class="hover-info-grid">
+                            <div class="hover-info-card">
+                                <button type="button" class="hover-info-trigger">当前性格</button>
+                                <div class="hover-info-popover">
+                                    <h4>当前性格</h4>
+                                    <p id="cat-personality">{{ cat.personality }}</p>
+                                </div>
+                            </div>
+                            <div class="hover-info-card">
+                                <button type="button" class="hover-info-trigger">原主人</button>
+                                <div class="hover-info-popover">
+                                    <h4>最高级原主人</h4>
+                                    <p id="cat-owner-text">@{{ cat.highest_level_owner_name or current_user.username }}
+                                        把它带到了 {{ cat.highest_level_reached or exp_progress.level }}
+                                        级。后续若等级没有再突破，这个名字就不会被改写。</p>
+                                </div>
+                            </div>
+                            <div class="hover-info-card">
+                                <button type="button" class="hover-info-trigger">成长摘要</button>
+                                <div class="hover-info-popover">
+                                    <h4>成长摘要</h4>
+                                    <p id="cat-story-summary">{{ cat.story_summary }}</p>
+                                </div>
+                            </div>
+                            <div class="hover-info-card">
+                                <button type="button" class="hover-info-trigger">最近变化</button>
+                                <div class="hover-info-popover">
+                                    <h4>最近一次变化</h4>
+                                    <p id="cat-latest-summary">{{ cat.latest_summary or "还没有新的成长记录。" }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% if can_release %}
+                        <div class="panel-actions panel-actions-right">
+                            <form action="/my-cat/release" method="POST" class="release-form">
+                                <input type="hidden" name="cat_id" value="{{ cat.id }}">
+                                <button type="submit" class="danger-btn">放入猫咪市场</button>
+                            </form>
+                        </div>
                         {% endif %}
                     </div>
                 </div>
 
-                <div class="cat-stage-layout">
-                    <div class="cat-stage-side">
-                        <div id="cat-avatar-card" class="cat-avatar-card" data-cat-name="{{ cat.name }}">
-                            {% if cat.image_url %}
-                            <img id="cat-avatar-image" src="{{ cat.image_url }}" alt="{{ cat.name }}">
-                            {% else %}
-                            <div id="cat-avatar-placeholder" class="cat-avatar-placeholder">
-                                <span>{{ cat.name[:1] }}</span>
-                            </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="info-panel">
-                            <div class="stats-row stats-row-tight">
-                                <div class="stat-box">
-                                    <span class="label">当前等级</span>
-                                    <strong id="cat-level-value" class="{% if exp_progress.level >= 6 %}limit-reached{% endif %}">
-                                        {{ exp_progress.level }}/6
-                                    </strong>
-                                </div>
-                                <div class="stat-box">
-                                    <span class="label">喂养次数</span>
-                                    <strong id="cat-feed-count-value" class="{% if cat.feed_count >= cat.max_feed_count %}limit-reached{% endif %}">
-                                        {{ cat.feed_count }}/{{ cat.max_feed_count }}
-                                    </strong>
-                                </div>
-                                <div class="stat-box">
-                                    <span class="label">总属性</span>
-                                    <strong id="cat-overall-power">{{ cat.overall_power }}</strong>
-                                </div>
-                            </div>
-                            <div class="current-stats-panel">
-                                <div class="section-title-row compact-row">
-                                    <h3>当前属性</h3>
-                                    <span class="section-hint">修炼负责经验，喂养负责升级与技能突破</span>
-                                </div>
-                                <div class="profile-grid compact-profile-grid">
-                                    {% for item in stat_cards %}
-                                    <div class="profile-item">
-                                        <span>{{ item.label }}</span>
-                                        <strong id="cat-stat-{{ item.key }}">{{ item.value }}</strong>
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            <div class="exp-panel">
-                                <div class="section-title-row compact-row">
-                                    <div>
-                                        <h3>经验条</h3>
-                                        <span id="cat-exp-text" class="section-hint">
-                                            {% if exp_progress.exp_to_next > 0 %}
-                                            {{ exp_progress.exp }}/{{ exp_progress.exp_to_next }}
-                                            {% else %}
-                                            已满级
-                                            {% endif %}
-                                        </span>
-                                    </div>
-                                    {% if exp_progress.exp_to_next > 0 %}
-                                    <span id="cat-exp-pill" class="pill{% if can_feed %} active{% else %} muted{% endif %}">
-                                        {% if can_feed %}已充满{% else %}还差 {{ exp_progress.remaining }}{% endif %}
-                                    </span>
-                                    {% else %}
-                                    <span id="cat-exp-pill" class="pill active">满级完成</span>
-                                    {% endif %}
-                                </div>
-                                <div class="exp-bar">
-                                    <div id="cat-exp-fill" class="exp-bar-fill" style="width: {{ exp_progress.percent }}%;"></div>
-                                </div>
-                                <p id="cat-feed-gate-hint" class="exp-panel-copy">{{ feed_gate_hint }}</p>
-                            </div>
-                            <div class="skill-panel">
-                                <div class="section-title-row compact-row">
-                                    <h3>已学会技能</h3>
-                                    <span class="section-hint">每喂一个视频学会一个技能，最多 6 个</span>
-                                </div>
-                                {% if skill_badges %}
-                                <div id="cat-skill-badges" class="pill-row compact">
-                                    {% for badge in skill_badges %}
-                                    <span class="skill-badge {{ badge.class }}">
-                                        <span class="skill-rarity">{{ badge.rarity }}</span>
-                                        {{ badge.name }}
-                                    </span>
-                                    {% endfor %}
-                                </div>
-                                {% else %}
-                                <p id="cat-skill-badges">还没有学会技能，先把经验练满后喂第一个视频。</p>
-                                {% endif %}
-                            </div>
-                            <div class="hover-info-grid">
-                                <div class="hover-info-card">
-                                    <button type="button" class="hover-info-trigger">当前性格</button>
-                                    <div class="hover-info-popover">
-                                        <h4>当前性格</h4>
-                                        <p id="cat-personality">{{ cat.personality }}</p>
-                                    </div>
-                                </div>
-                                <div class="hover-info-card">
-                                    <button type="button" class="hover-info-trigger">原主人</button>
-                                    <div class="hover-info-popover">
-                                        <h4>最高级原主人</h4>
-                                        <p id="cat-owner-text">@{{ cat.highest_level_owner_name or current_user.username }} 把它带到了 {{ cat.highest_level_reached or exp_progress.level }} 级。后续若等级没有再突破，这个名字就不会被改写。</p>
-                                    </div>
-                                </div>
-                                <div class="hover-info-card">
-                                    <button type="button" class="hover-info-trigger">成长摘要</button>
-                                    <div class="hover-info-popover">
-                                        <h4>成长摘要</h4>
-                                        <p id="cat-story-summary">{{ cat.story_summary }}</p>
-                                    </div>
-                                </div>
-                                <div class="hover-info-card">
-                                    <button type="button" class="hover-info-trigger">最近变化</button>
-                                    <div class="hover-info-popover">
-                                        <h4>最近一次变化</h4>
-                                        <p id="cat-latest-summary">{{ cat.latest_summary or "还没有新的成长记录。" }}</p>
-                                    </div>
-                                </div>
-                            </div>
-                            {% if can_release %}
-                            <div class="panel-actions panel-actions-right">
-                                <form action="/my-cat/release" method="POST">
-                                    <input type="hidden" name="cat_id" value="{{ cat.id }}">
-                                    <button type="submit" class="danger-btn">放入猫咪市场</button>
-                                </form>
-                            </div>
-                            {% endif %}
+                <div id="chat-section" class="unified-dialog-card anchor-target">
+                    <div class="section-title-row">
+                        <div>
+                            <h2>对话与喂养</h2>
+                            <span class="section-hint">在同一个输入框里聊天；如果内容里带有抖音链接，就自动按喂养处理</span>
                         </div>
                     </div>
+                    <div id="task-status-bar" class="task-status-bar hidden" aria-live="polite"></div>
 
-                    <div class="unified-dialog-card">
-                        <div class="section-title-row">
-                            <div>
-                                <h2>对话与喂养</h2>
-                                <span class="section-hint">在同一个输入框里聊天；如果内容里带有抖音链接，就自动按喂养处理</span>
+                    <div class="chat-messages" id="chatMessages">
+                        {% if not chat_history %}
+                        <div class="message assistant">
+                            <div class="message-content">
+                                喵，我已经准备好了。你可以先跟我聊聊天，也可以直接贴一条抖音链接给我成长。
                             </div>
                         </div>
-                        <div id="task-status-bar" class="task-status-bar hidden" aria-live="polite"></div>
-
-                        <div class="chat-messages" id="chatMessages">
-                            {% if not chat_history %}
-                            <div class="message assistant">
-                                <div class="message-content">
-                                    喵，我已经准备好了。你可以先跟我聊聊天，也可以直接贴一条抖音链接给我成长。
-                                </div>
+                        {% else %}
+                        {% for msg in chat_history %}
+                        <div class="message {{ msg.role }} {% if msg.type == 'event' %}timeline-event-msg{% endif %}">
+                            {% if msg.type == 'event' %}
+                            <div class="message-content timeline-style">
+                                <span class="event-icon">{% if msg.event_type == 'feed' %}🌟{% else %}🌿{% endif
+                                    %}</span>
+                                {{ msg.content }}
                             </div>
                             {% else %}
-                            {% for msg in chat_history %}
-                            <div class="message {{ msg.role }} {% if msg.type == 'event' %}timeline-event-msg{% endif %}">
-                                {% if msg.type == 'event' %}
-                                <div class="message-content timeline-style">
-                                    <span class="event-icon">{% if msg.event_type == 'feed' %}🌟{% else %}🌿{% endif %}</span>
-                                    {{ msg.content }}
-                                </div>
-                                {% else %}
-                                <div class="message-content">{{ msg.content }}</div>
-                                {% endif %}
-                            </div>
-                            {% endfor %}
+                            <div class="message-content">{{ msg.content }}</div>
                             {% endif %}
                         </div>
+                        {% endfor %}
+                        {% endif %}
+                    </div>
 
-                        <form
-                            id="interaction-form"
-                            class="chat-input-area unified-input-area"
-                            method="POST"
-                            data-chat-endpoint="/api/my-cat/chat/stream"
-                            data-feed-endpoint="/api/my-cat/feed"
-                            data-refresh-endpoint="/api/my-cat/current"
-                        >
-                            <input type="hidden" name="cat_id" value="{{ cat.id }}">
-                            <textarea
-                                id="interaction-input"
-                                name="content"
-                                rows="3"
-                                placeholder="输入聊天内容，或粘贴抖音分享文案 / 链接"
-                                {% if not can_feed %}data-feed-locked="true"{% endif %}
-                                data-feed-locked-message="{{ feed_gate_hint }}"
-                                required
-                            ></textarea>
-                            <div class="interaction-footer">
-                                <div class="quick-training-row">
-                                    {% for action in training_actions %}
-                                    <button
-                                        type="button"
-                                        class="ghost-btn compact-btn training-action-btn"
-                                        data-action-key="{{ action.key }}"
-                                        title="{{ action.description }} ({{ action.exp_hint }})"
-                                    >
-                                        {{ action.label }}
-                                    </button>
-                                    {% endfor %}
-                                </div>
-                                <span id="interaction-hint" class="section-hint">
-                                    {{ feed_gate_hint }}
-                                </span>
-                                <button id="interaction-submit-btn" type="submit" class="accent-btn">发送</button>
+                    <form id="interaction-form" class="chat-input-area unified-input-area" method="POST"
+                        data-chat-endpoint="/api/my-cat/chat/stream" data-feed-endpoint="/api/my-cat/feed"
+                        data-refresh-endpoint="/api/my-cat/current">
+                        <input type="hidden" name="cat_id" value="{{ cat.id }}">
+                        <textarea id="interaction-input" name="content" rows="3" placeholder="输入聊天内容，或粘贴抖音分享文案 / 链接" {%
+                            if not can_feed %}data-feed-locked="true" {% endif %}
+                            data-feed-locked-message="{{ feed_gate_hint }}" required></textarea>
+                        <div class="interaction-footer">
+                            <div class="quick-training-row">
+                                {% for action in training_actions %}
+                                <button type="button" class="ghost-btn compact-btn training-action-btn"
+                                    data-action-key="{{ action.key }}"
+                                    title="{{ action.description }} ({{ action.exp_hint }})">
+                                    {{ action.label }}
+                                </button>
+                                {% endfor %}
                             </div>
+                            <span id="interaction-hint" class="section-hint">
+                                {{ feed_gate_hint }}
+                            </span>
+                            <button id="interaction-submit-btn" type="submit" class="accent-btn">发送</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </section>
+
+    <section id="evolution-section" class="content-card anchor-target">
+        <div class="section-title-row">
+            <div>
+                <h2>进化历程</h2>
+                <span class="section-hint">每次喂养进化前都会自动备份；每只猫仅有 1 次回退机会</span>
+            </div>
+            <span id="rollback-status-pill" class="pill {% if rollback_used %}muted{% else %}active{% endif %}">
+                {{ "回退机会已使用" if rollback_used else "可回退 1 次" }}
+            </span>
+        </div>
+        <div id="evolution-history-list" class="evolution-grid">
+            {% if evolution_history %}
+            {% for item in evolution_history %}
+            <article class="evolution-history-card" data-evolution-snapshot-id="{{ item.snapshot_id }}">
+                <div class="evolution-history-media">
+                    {% if item.image_url %}
+                    <img src="{{ item.image_url }}" alt="{{ item.cat_name }}">
+                    {% else %}
+                    <div class="evolution-history-placeholder">{{ item.cat_name[:1] }}</div>
+                    {% endif %}
+                </div>
+                <div class="evolution-history-body">
+                    <div class="evolution-history-header">
+                        <div>
+                            <strong>{{ item.label }}</strong>
+                            <p class="evolution-history-name">{{ item.cat_name }} · {{ item.cat_stage }}</p>
+                        </div>
+                        {% if item.is_current_state %}
+                        <span class="pill active">当前版本</span>
+                        {% endif %}
+                    </div>
+                    <div class="action-row evolution-history-actions">
+                        <button type="button" class="ghost-btn compact-btn" data-open-evolution-detail
+                            data-label="{{ item.label | e }}" data-cat-name="{{ item.cat_name | e }}"
+                            data-cat-stage="{{ item.cat_stage | e }}" data-image-url="{{ item.image_url | e }}"
+                            data-summary="{{ item.summary | e }}" data-level="{{ item.level_before }}"
+                            data-feed-count="{{ item.feed_count_before }}" data-max-feed="{{ cat.max_feed_count }}"
+                            data-video-title="{{ item.video_title | e }}" data-video-url="{{ item.video_url | e }}"
+                            data-growth-summary="{{ item.growth_summary | e }}"
+                            data-can-rollback="{{ 'true' if item.can_rollback else 'false' }}"
+                            data-snapshot-id="{{ item.snapshot_id }}"
+                            data-is-current="{{ 'true' if item.is_current_state else 'false' }}">
+                            详情
+                        </button>
+                        {% if item.can_rollback %}
+                        <form action="/my-cat/rollback" method="POST" class="rollback-form">
+                            <input type="hidden" name="snapshot_id" value="{{ item.snapshot_id }}">
+                            <button type="submit" class="ghost-btn compact-btn">回退</button>
                         </form>
+                        {% else %}
+                        <span class="ghost-btn compact-btn disabled">已使用</span>
+                        {% endif %}
                     </div>
                 </div>
+            </article>
+            {% endfor %}
+            {% else %}
+            <div class="empty-state compact">
+                还没有产生进化备份。先把经验条练满，再喂第一个视频生成历程记录。
             </div>
-
-        </section>
-        {% endif %}
-
-    </div>
-    {% if can_adopt_new %}
-    <div id="adoption-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="领养猫咪">
-        <div class="dialog-backdrop" data-close-adoption></div>
-        <section class="content-card adoption-dialog">
-            <div class="dialog-header">
-                <div>
-                    <h2>{{ "第一次领养" if needs_initial_adoption else "领养下一只猫" }}</h2>
-                    <span class="section-hint">先选择品种和颜色；系统会基于预设提示词自动生成初始形象</span>
-                </div>
-                <button type="button" class="ghost-btn dialog-close-btn" data-close-adoption aria-label="关闭领养窗口">&times;</button>
-            </div>
-            <form class="stack-form" action="/my-cat/adopt" method="POST" data-adoption-form>
-                <div class="adoption-grid">
-                    <label>
-                        <span>猫咪品种</span>
-                        <select name="breed" required>
-                            {% for breed in breed_options %}
-                            <option value="{{ breed }}">{{ breed }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                    <label>
-                        <span>猫咪颜色</span>
-                        <select name="color" required>
-                            {% for color in color_options %}
-                            <option value="{{ color }}">{{ color }}</option>
-                            {% endfor %}
-                        </select>
-                    </label>
-                </div>
-                <div class="form-footer-hint">
-                    <span class="pill muted">首次领养就会生成初始形象</span>
-                    <span class="section-hint">之后先靠日常修炼攒满经验，再喂视频升级并学技能</span>
-                </div>
-                <div class="dialog-actions action-row">
-                    <button type="button" class="ghost-btn" data-close-adoption>再想想</button>
-                    <button type="submit" class="primary-btn">{{ "立即领养第一只猫" if needs_initial_adoption else "确认领养新猫" }}</button>
-                </div>
-            </form>
-        </section>
-    </div>
+            {% endif %}
+        </div>
+    </section>
     {% endif %}
-    <div
-        id="growth-guide-dialog"
-        class="dialog-overlay {% if not show_growth_guide %}hidden{% endif %}"
-        aria-hidden="{{ 'false' if show_growth_guide else 'true' }}"
-        role="dialog"
-        aria-modal="true"
-        aria-label="成长说明"
-        data-auto-open="{{ 'true' if show_growth_guide else 'false' }}"
-    >
-        <div class="dialog-backdrop" data-close-growth-guide></div>
-        <section class="content-card guide-dialog">
-            <div class="dialog-header">
-                <div>
-                    <h2>成长说明</h2>
-                    <span class="section-hint">该说明仅首次展示一次</span>
-                </div>
-                <button type="button" class="ghost-btn dialog-close-btn" data-close-growth-guide aria-label="关闭成长说明">&times;</button>
+
+</div>
+{% if can_adopt_new %}
+<div id="adoption-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true"
+    aria-label="领养猫咪">
+    <div class="dialog-backdrop" data-close-adoption></div>
+    <section class="content-card adoption-dialog">
+        <div class="dialog-header">
+            <div>
+                <h2>{{ "第一次领养" if needs_initial_adoption else "领养下一只猫" }}</h2>
+                <span class="section-hint">先选择品种和颜色；系统会基于预设提示词自动生成初始形象</span>
             </div>
-            <div class="moment-list onboarding-moment-list">
-                <div class="moment-item">
-                    <strong>1. 先领养</strong>
-                    <p>第一次领养要先选颜色和品种，系统会根据预设提示词自动生成形象。</p>
-                </div>
-                <div class="moment-item">
-                    <strong>2. 先修炼再喂养</strong>
-                    <p>哈气能随机涨经验（5~30），击打能随机涨经验（10~15），经验条满了才能喂视频升级。</p>
-                </div>
-                <div class="moment-item">
-                    <strong>3. 最多 6 次突破</strong>
-                    <p>猫咪从 0 级升到 6 级，最多喂 6 个视频；每喂一个视频都会升级、学会一个技能，并刷新形象。</p>
-                </div>
+            <button type="button" class="ghost-btn dialog-close-btn" data-close-adoption
+                aria-label="关闭领养窗口">&times;</button>
+        </div>
+        <form class="stack-form" action="/my-cat/adopt" method="POST" data-adoption-form>
+            <div class="adoption-grid">
+                <label>
+                    <span>猫咪品种</span>
+                    <select name="breed" required>
+                        {% for breed in breed_options %}
+                        <option value="{{ breed }}">{{ breed }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    <span>猫咪颜色</span>
+                    <select name="color" required>
+                        {% for color in color_options %}
+                        <option value="{{ color }}">{{ color }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+            </div>
+            <div class="form-footer-hint">
+                <span class="pill muted">首次领养就会生成初始形象</span>
+                <span class="section-hint">之后先靠日常修炼攒满经验，再喂视频升级并学技能</span>
             </div>
             <div class="dialog-actions action-row">
-                <button type="button" class="primary-btn" data-close-growth-guide>我知道了</button>
+                <button type="button" class="ghost-btn" data-close-adoption>再想想</button>
+                <button type="submit" class="primary-btn">{{ "立即领养第一只猫" if needs_initial_adoption else "确认领养新猫"
+                    }}</button>
             </div>
-        </section>
-    </div>
+        </form>
+    </section>
+</div>
+{% endif %}
 
-    <div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-label="分享卡预览">
-        <div class="dialog-backdrop" data-close-preview></div>
-        <div class="unified-dialog-card image-preview-dialog">
-            <div class="dialog-header">
-                <div>
-                    <h3>分享卡预览</h3>
-                    <span class="section-hint">确认画面没问题后再分享</span>
+<div id="evolution-detail-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true"
+    aria-label="进化详情">
+    <div class="dialog-backdrop" data-close-evolution-detail></div>
+    <div class="unified-dialog-card evolution-detail-dialog">
+        <div class="dialog-header">
+            <div>
+                <h3 id="evo-detail-title">进化详情</h3>
+                <span class="section-hint" id="evo-detail-subtitle">未命名猫咪 · 初始态</span>
+            </div>
+            <button type="button" class="ghost-btn dialog-close-btn" data-close-evolution-detail
+                aria-label="关闭详情">&times;</button>
+        </div>
+        <div class="evolution-detail-content">
+            <div class="evolution-detail-media">
+                <img id="evo-detail-image" src="" alt="猫咪图片" class="hidden">
+                <div id="evo-detail-placeholder" class="evolution-detail-placeholder hidden">猫</div>
+            </div>
+            <div class="evolution-detail-info">
+                <p id="evo-detail-summary" class="evolution-history-summary"></p>
+                <div class="pill-row compact">
+                    <span id="evo-detail-level" class="pill muted">回退后等级 Lv.0</span>
+                    <span id="evo-detail-feed" class="pill muted">回退后喂养 0/6</span>
                 </div>
-                <button type="button" class="ghost-btn dialog-close-btn" data-close-preview aria-label="关闭预览">&times;</button>
-            </div>
-            <div class="image-preview-body">
-                <img id="image-preview-target" src="" alt="猫咪分享卡预览图">
-            </div>
-            <div class="image-preview-meta">
-                <h4 id="image-preview-title">分享卡预览</h4>
-                <p id="image-preview-desc">预览图文字与技能区分开展示，不会出现重叠。</p>
+                <div id="evo-detail-video-row" class="evolution-history-link-row hidden">
+                    <span class="section-hint">对应进化视频：</span>
+                    <a id="evo-detail-video-link" class="ghost-btn compact-btn anchor-btn hidden" href="#"
+                        target="_blank" rel="noopener noreferrer">打开视频</a>
+                    <span id="evo-detail-video-text" class="section-hint hidden"></span>
+                </div>
+                <p id="evo-detail-growth" class="section-hint evolution-history-growth"></p>
             </div>
         </div>
+        <div class="dialog-actions action-row evolution-detail-actions">
+            <form id="evo-detail-rollback-form" action="/my-cat/rollback" method="POST" class="hidden rollback-form">
+                <input type="hidden" name="snapshot_id" id="evo-detail-snapshot-id" value="">
+                <button type="submit" class="ghost-btn">回退到这个版本</button>
+            </form>
+            <span id="evo-detail-disabled-btn" class="ghost-btn disabled hidden">回退机会已使用</span>
+        </div>
     </div>
+</div>
 
-    <div id="loading-overlay" class="dialog-overlay hidden" aria-hidden="true" role="status" aria-live="polite" aria-modal="true">
-        <div class="dialog-backdrop"></div>
-        <div class="unified-dialog-card loading-dialog">
-            <div class="loading-spinner" aria-hidden="true"></div>
-            <h3 id="loading-overlay-title">正在领养中...</h3>
-            <p id="loading-overlay-text">我们正在为你匹配猫咪并生成形象，请稍等片刻。</p>
+<div id="growth-guide-dialog" class="dialog-overlay {% if not show_growth_guide %}hidden{% endif %}"
+    aria-hidden="{{ 'false' if show_growth_guide else 'true' }}" role="dialog" aria-modal="true" aria-label="成长说明"
+    data-auto-open="{{ 'true' if show_growth_guide else 'false' }}">
+    <div class="dialog-backdrop" data-close-growth-guide></div>
+    <section class="content-card guide-dialog">
+        <div class="dialog-header">
+            <div>
+                <h2>成长说明</h2>
+                <span class="section-hint">该说明仅首次展示一次</span>
+            </div>
+            <button type="button" class="ghost-btn dialog-close-btn" data-close-growth-guide
+                aria-label="关闭成长说明">&times;</button>
+        </div>
+        <div class="moment-list onboarding-moment-list">
+            <div class="moment-item">
+                <strong>1. 先领养</strong>
+                <p>第一次领养要先选颜色和品种，系统会根据预设提示词自动生成形象。</p>
+            </div>
+            <div class="moment-item">
+                <strong>2. 先修炼再喂养</strong>
+                <p>哈气能随机涨经验（5~30），击打能随机涨经验（10~15），经验条满了才能喂视频升级。</p>
+            </div>
+            <div class="moment-item">
+                <strong>3. 最多 6 次突破</strong>
+                <p>猫咪从 0 级升到 6 级，最多喂 6 个视频；每喂一个视频都会升级、学会一个技能，并刷新形象。</p>
+            </div>
+        </div>
+        <div class="dialog-actions action-row">
+            <button type="button" class="primary-btn" data-close-growth-guide>我知道了</button>
+        </div>
+    </section>
+</div>
+
+<div id="image-preview-dialog" class="dialog-overlay hidden" aria-hidden="true" role="dialog" aria-modal="true"
+    aria-label="分享卡预览">
+    <div class="dialog-backdrop" data-close-preview></div>
+    <div class="unified-dialog-card image-preview-dialog">
+        <div class="dialog-header">
+            <div>
+                <h3>分享卡预览</h3>
+                <span class="section-hint">确认画面没问题后再分享</span>
+            </div>
+            <button type="button" class="ghost-btn dialog-close-btn" data-close-preview
+                aria-label="关闭预览">&times;</button>
+        </div>
+        <div class="image-preview-body">
+            <img id="image-preview-target" src="" alt="猫咪分享卡预览图">
+        </div>
+        <div class="image-preview-meta">
+            <h4 id="image-preview-title">分享卡预览</h4>
+            <p id="image-preview-desc">预览图文字与技能区分开展示，不会出现重叠。</p>
         </div>
     </div>
+</div>
+
+<div id="loading-overlay" class="dialog-overlay hidden" aria-hidden="true" role="status" aria-live="polite"
+    aria-modal="true">
+    <div class="dialog-backdrop"></div>
+    <div class="unified-dialog-card loading-dialog">
+        <div class="loading-spinner" aria-hidden="true"></div>
+        <h3 id="loading-overlay-title">正在领养中...</h3>
+        <p id="loading-overlay-text">我们正在为你匹配猫咪并生成形象，请稍等片刻。</p>
+    </div>
+</div>
 {% endblock %}

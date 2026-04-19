@@ -36,6 +36,34 @@ DEFAULT_SETTINGS = {
 }
 MAX_CAT_LEVEL = 6
 DEFAULT_EXP_TO_NEXT = 100
+CAT_SNAPSHOT_RESTORE_FIELDS = [
+    "name",
+    "stage",
+    "feed_count",
+    "max_feed_count",
+    "level",
+    "exp",
+    "exp_to_next",
+    "learned_skills_json",
+    "wisdom",
+    "grit",
+    "creativity",
+    "agility",
+    "cooperation",
+    "overall_power",
+    "image_url",
+    "personality",
+    "story_summary",
+    "latest_summary",
+    "is_active",
+    "is_public",
+    "available_for_adoption",
+    "released_at",
+    "highest_level_owner_id",
+    "highest_level_owner_name",
+    "highest_level_reached",
+    "final_persona_json",
+]
 DAILY_TRAINING_ACTIONS: dict[str, dict[str, Any]] = {
     "haqi": {
         "label": "哈气",
@@ -203,6 +231,7 @@ def init_db() -> None:
                 highest_level_owner_id INTEGER NOT NULL DEFAULT 0,
                 highest_level_owner_name TEXT NOT NULL DEFAULT '',
                 highest_level_reached INTEGER NOT NULL DEFAULT 0,
+                rollback_used INTEGER NOT NULL DEFAULT 0,
                 final_persona_json TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
@@ -237,6 +266,21 @@ def init_db() -> None:
                 cat_id INTEGER NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(cat_id) REFERENCES cats(id)
+            );
+
+            CREATE TABLE IF NOT EXISTS cat_evolution_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                cat_id INTEGER NOT NULL,
+                snapshot_index INTEGER NOT NULL,
+                snapshot_label TEXT NOT NULL DEFAULT '',
+                level_before INTEGER NOT NULL DEFAULT 0,
+                feed_count_before INTEGER NOT NULL DEFAULT 0,
+                trigger_video_title TEXT NOT NULL DEFAULT '',
+                trigger_source_url TEXT NOT NULL DEFAULT '',
+                snapshot_json TEXT NOT NULL,
+                restored_at TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(cat_id) REFERENCES cats(id)
             );
@@ -287,6 +331,7 @@ def init_db() -> None:
         ensure_column(
             conn, "cats", "highest_level_reached", "INTEGER NOT NULL DEFAULT 0"
         )
+        ensure_column(conn, "cats", "rollback_used", "INTEGER NOT NULL DEFAULT 0")
         ensure_column(
             conn, "cat_feed_records", "learned_skill", "TEXT NOT NULL DEFAULT ''"
         )
@@ -445,6 +490,7 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
             highest_level_owner_id INTEGER NOT NULL DEFAULT 0,
             highest_level_owner_name TEXT NOT NULL DEFAULT '',
             highest_level_reached INTEGER NOT NULL DEFAULT 0,
+            rollback_used INTEGER NOT NULL DEFAULT 0,
             final_persona_json TEXT NOT NULL DEFAULT '',
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
@@ -459,7 +505,7 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
             wisdom, grit, creativity, agility, cooperation, overall_power,
             image_url, personality, story_summary, latest_summary,
             is_active, is_public, available_for_adoption, released_at, final_persona_json,
-            highest_level_owner_id, highest_level_owner_name, highest_level_reached,
+            highest_level_owner_id, highest_level_owner_name, highest_level_reached, rollback_used,
             created_at, updated_at
         )
         SELECT
@@ -489,6 +535,7 @@ def rebuild_cats_table_without_user_unique(conn: sqlite3.Connection) -> None:
             COALESCE(highest_level_owner_id, user_id),
             COALESCE(NULLIF(highest_level_owner_name, ''), (SELECT username FROM users WHERE users.id = cats.user_id LIMIT 1), ''),
             MAX(COALESCE(highest_level_reached, 0), MIN(COALESCE(feed_count, 0), 6)),
+            COALESCE(rollback_used, 0),
             created_at, updated_at
         FROM cats
         """
@@ -950,6 +997,7 @@ def build_initial_cat_payload(
         "highest_level_owner_id": user_id,
         "highest_level_owner_name": username.strip(),
         "highest_level_reached": 0,
+        "rollback_used": 0,
         "created_at": now,
         "updated_at": now,
     }
@@ -967,13 +1015,13 @@ def create_initial_cat_for_user(
                 wisdom, grit, creativity, agility, cooperation, overall_power,
                 image_url, personality, story_summary, latest_summary, is_active, is_public,
                 available_for_adoption, released_at, highest_level_owner_id, highest_level_owner_name,
-                highest_level_reached, created_at, updated_at
+                highest_level_reached, rollback_used, created_at, updated_at
             ) VALUES (
                 :user_id, :cat_no, :name, :stage, :feed_count, :max_feed_count, :level, :exp, :exp_to_next, :learned_skills_json,
                 :wisdom, :grit, :creativity, :agility, :cooperation, :overall_power,
                 :image_url, :personality, :story_summary, :latest_summary, :is_active, :is_public,
                 :available_for_adoption, :released_at, :highest_level_owner_id, :highest_level_owner_name,
-                :highest_level_reached, :created_at, :updated_at
+                :highest_level_reached, :rollback_used, :created_at, :updated_at
             )
             """,
             payload,
@@ -1165,6 +1213,57 @@ def list_cat_timeline(cat_id: int, limit: int = 20) -> list[dict[str, Any]]:
     return timeline[:limit]
 
 
+def create_cat_evolution_snapshot(
+    conn: sqlite3.Connection,
+    cat: dict[str, Any],
+    trigger_video_title: str = "",
+    trigger_source_url: str = "",
+) -> dict[str, Any]:
+    now = utcnow()
+    snapshot_index = int(cat.get("feed_count") or 0) + 1
+    snapshot_payload = dict(cat)
+    snapshot_payload["snapshot_created_at"] = now
+    cursor = conn.execute(
+        """
+        INSERT INTO cat_evolution_snapshots (
+            cat_id, snapshot_index, snapshot_label, level_before, feed_count_before,
+            trigger_video_title, trigger_source_url, snapshot_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            int(cat["id"]),
+            snapshot_index,
+            f"第 {snapshot_index} 次进化前备份",
+            int(cat.get("level") or 0),
+            int(cat.get("feed_count") or 0),
+            trigger_video_title.strip(),
+            trigger_source_url.strip(),
+            json.dumps(snapshot_payload, ensure_ascii=False),
+            now,
+        ),
+    )
+    return {
+        "id": int(cursor.lastrowid or 0),
+        "snapshot_index": snapshot_index,
+        "created_at": now,
+    }
+
+
+def list_cat_evolution_snapshots(cat_id: int, limit: int = 20) -> list[dict[str, Any]]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT *
+            FROM cat_evolution_snapshots
+            WHERE cat_id = ?
+            ORDER BY snapshot_index DESC, created_at DESC
+            LIMIT ?
+            """,
+            (cat_id, limit),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
 def add_cat_feed_record(
     cat_id: int, feed_result: dict[str, Any], current_owner_name: str = ""
 ) -> dict[str, Any]:
@@ -1189,6 +1288,13 @@ def add_cat_feed_record(
         current_exp = int(cat.get("exp") or 0)
         if current_exp < exp_to_next:
             raise ValueError("经验条还没满，先完成日常修炼，再喂视频让它升级。")
+
+        create_cat_evolution_snapshot(
+            conn,
+            cat,
+            trigger_video_title=str(feed_result.get("video_title") or ""),
+            trigger_source_url=str(feed_result.get("source_url") or ""),
+        )
 
         updated_stats = {
             "wisdom": clamp_stat(
@@ -1316,6 +1422,7 @@ def add_cat_feed_record(
                 highest_level_owner_id = ?,
                 highest_level_owner_name = ?,
                 highest_level_reached = ?,
+                rollback_used = ?,
                 latest_summary = ?,
                 updated_at = ?
             WHERE id = ?
@@ -1336,12 +1443,99 @@ def add_cat_feed_record(
                 highest_level_owner_id,
                 highest_level_owner_name,
                 highest_level_reached,
+                int(cat.get("rollback_used") or 0),
                 latest_summary,
                 now,
                 cat_id,
             ),
         )
     return get_user_cat(int(cat["user_id"])) or {}
+
+
+def rollback_cat_to_snapshot(cat_id: int, snapshot_id: int) -> dict[str, Any]:
+    now = utcnow()
+    with get_connection() as conn:
+        cat_row = conn.execute(
+            "SELECT * FROM cats WHERE id = ? LIMIT 1", (cat_id,)
+        ).fetchone()
+        if not cat_row:
+            raise ValueError("猫咪不存在")
+        cat = dict(cat_row)
+        if int(cat.get("rollback_used") or 0) == 1:
+            raise ValueError("这只猫的回退机会已经使用过了。")
+
+        snapshot_row = conn.execute(
+            """
+            SELECT *
+            FROM cat_evolution_snapshots
+            WHERE id = ? AND cat_id = ?
+            LIMIT 1
+            """,
+            (snapshot_id, cat_id),
+        ).fetchone()
+        if not snapshot_row:
+            raise ValueError("未找到对应的进化备份。")
+        snapshot = dict(snapshot_row)
+        try:
+            snapshot_payload = json.loads(str(snapshot.get("snapshot_json") or "{}"))
+        except Exception as exc:
+            raise ValueError("进化备份损坏，无法回退。") from exc
+        if not isinstance(snapshot_payload, dict):
+            raise ValueError("进化备份格式无效，无法回退。")
+
+        restore_feed_count = int(snapshot.get("feed_count_before") or 0)
+        restore_message = (
+            f"已回退到{str(snapshot.get('snapshot_label') or '所选备份')}的状态。"
+            "这只猫的回退机会已使用。"
+        )
+
+        conn.execute(
+            "DELETE FROM cat_feed_records WHERE cat_id = ? AND feed_index > ?",
+            (cat_id, restore_feed_count),
+        )
+        conn.execute(
+            "DELETE FROM cat_training_records WHERE cat_id = ? AND created_at > ?",
+            (cat_id, str(snapshot.get("created_at") or "")),
+        )
+        conn.execute(
+            "DELETE FROM cat_messages WHERE cat_id = ? AND created_at > ?",
+            (cat_id, str(snapshot.get("created_at") or "")),
+        )
+        conn.execute(
+            """
+            DELETE FROM cat_evolution_snapshots
+            WHERE cat_id = ? AND snapshot_index > ?
+            """,
+            (cat_id, int(snapshot.get("snapshot_index") or 0)),
+        )
+
+        assignments = ", ".join(f"{field} = ?" for field in CAT_SNAPSHOT_RESTORE_FIELDS)
+        values = [snapshot_payload.get(field) for field in CAT_SNAPSHOT_RESTORE_FIELDS]
+        values[CAT_SNAPSHOT_RESTORE_FIELDS.index("latest_summary")] = restore_message
+        values.extend([1, now, cat_id])
+        conn.execute(
+            f"""
+            UPDATE cats
+            SET {assignments},
+                rollback_used = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            values,
+        )
+        conn.execute(
+            """
+            UPDATE cat_evolution_snapshots
+            SET restored_at = ?
+            WHERE id = ?
+            """,
+            (now, snapshot_id),
+        )
+
+    restored_cat = get_cat_by_id(cat_id)
+    if not restored_cat:
+        raise ValueError("回退后未找到猫咪数据。")
+    return restored_cat
 
 
 def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:

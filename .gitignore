@@ -3,5 +3,5 @@ node_modules/
 .venv/
 *.pyc
 *.log
-docker-old/
+md/
 哈吉咪LOGO方.png
