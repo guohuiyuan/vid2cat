@@ -39,6 +39,7 @@ from .db import (
     count_public_cats,
     create_guest_user,
     create_initial_cat_for_user,
+    force_hissing_persona_for_all_cats,
     get_atlas,
     get_cat_by_id,
     get_or_activate_user_cat,
@@ -381,7 +382,7 @@ def build_cat_sync_payload(user_id: int, cat: dict[str, Any]) -> dict[str, Any]:
     owned_cards = [build_cat_card(row) for row in list_user_cats(user_id, limit=3)]
     feed_events = list_cat_timeline(int(cat["id"]), limit=10)
     latest_feed_event = next(
-        (event for event in reversed(feed_events) if event.get("event_type") == "feed"),
+        (event for event in feed_events if event.get("event_type") == "feed"),
         None,
     )
     payload["owned_cats"] = owned_cards
@@ -552,6 +553,11 @@ async def run_feed_task(
             asyncio.to_thread(parse_douyin_to_feed, parsed_url, settings),
             timeout=45,
         )
+        duration_seconds = int(feed_result.get("duration_seconds") or 0)
+        if duration_seconds > 60:
+            raise ValueError(
+                f"当前视频时长约 {duration_seconds} 秒，超过 1 分钟。请换一个不超过 1 分钟的抖音视频。"
+            )
         update_async_task(task_id, message="正在写入成长记录")
         updated_cat = await asyncio.to_thread(
             add_cat_feed_record, int(cat["id"]), feed_result, current_owner_name
@@ -663,7 +669,9 @@ def submit_feed_for_current_user(request: Request, raw_input: str) -> RedirectRe
     parsed_url = extract_first_url(raw_input) or raw_input.strip()
     if not is_douyin_url(parsed_url):
         return redirect_with_message("/my-cat", error="请输入抖音作品链接")
-    return redirect_with_message("/my-cat", message="任务已提交")
+    return redirect_with_message(
+        "/my-cat", message="任务已提交（仅支持不超过 1 分钟的抖音视频）"
+    )
 
 
 app = FastAPI(title="vid2cat", version="0.1.0")
@@ -674,6 +682,7 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 @app.on_event("startup")
 def on_startup() -> None:
     init_db()
+    force_hissing_persona_for_all_cats()
 
 
 def redirect_with_message(

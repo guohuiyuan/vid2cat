@@ -905,7 +905,11 @@ def build_initial_cat_payload(
 ) -> dict[str, Any]:
     now = utcnow()
     base_name = (username.strip() or "新手")[:8]
-    wisdom = grit = creativity = agility = cooperation = 50
+    wisdom = random.randint(45, 55)
+    grit = random.randint(45, 55)
+    creativity = random.randint(45, 55)
+    agility = random.randint(45, 55)
+    cooperation = random.randint(45, 55)
     profile = ai_data.get("profile") if ai_data else {}
     return {
         "user_id": user_id,
@@ -928,9 +932,9 @@ def build_initial_cat_payload(
         ),
         "image_url": ai_data.get("image_url") if ai_data else "",
         "personality": profile.get("personality")
-        or "亲人、好奇、会观察主人的心情，正等待第一条抖音链接来塑造自己。",
+        or "超凶哈气系，警惕心强，先哈气再靠近，但认主后会把守护欲拉满。",
         "story_summary": profile.get("story")
-        or "这是一只刚刚被领取的小猫，它想慢慢长成最懂主人的那个陪伴者。",
+        or "这是一只刚被领养的哈气小猫，外表超凶，内心其实在学习如何守护主人。",
         "latest_summary": "还没有喂过抖音链接，先试着喂第一条吧。",
         "is_active": 1,
         "is_public": 0,
@@ -968,6 +972,23 @@ def create_initial_cat_for_user(
             payload,
         )
     return get_user_cat(user_id) or payload
+
+
+def force_hissing_persona_for_all_cats() -> int:
+    now = utcnow()
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE cats
+            SET personality = ?,
+                updated_at = ?
+            """,
+            (
+                "超凶哈气系，警惕心强，先哈气再靠近，但认主后会把守护欲拉满。",
+                now,
+            ),
+        )
+    return int(cursor.rowcount or 0)
 
 
 def count_user_owned_cats(user_id: int) -> int:

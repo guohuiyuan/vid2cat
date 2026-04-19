@@ -227,8 +227,8 @@ def build_cat_profile(title: str, description: str, tags: list[str]) -> dict[str
         "breed": "赛博短视频猫",
         "skill": f"{keyword}拟态",
         "power": str(82 + len(title) % 16),
-        "personality": "亲人、机灵、带一点戏精感，擅长把内容灵感翻译成猫咪语言",
-        "story": f"它从视频《{title[:18]}》里学会了把内容灵感整理成自己的成长能量。",
+        "personality": "超凶哈气系，先哈气示威，确认安全后才会靠近，守护欲很强",
+        "story": f"它从视频《{title[:18]}》里学会了更有压迫感的哈气与守护节奏。",
         "rarity": "SSR" if len(description) % 2 == 0 else "SR",
     }
 
@@ -244,11 +244,11 @@ def build_miaomiao_setting(
     color_text = f"毛色偏向 {color}。" if color.strip() else ""
     stage_text = f"当前阶段是 {stage}。" if stage.strip() else ""
     return (
-        "请把这只猫写成“喵喵系角色”：亲人、敏感、聪明、会观察主人的情绪，"
-        "有陪伴欲，也有一点嘴硬心软和小傲娇。"
-        "它喜欢把外界内容理解成自己的成长能量，说话自然，不要每句都重复“喵”，"
-        "但可以在关键句尾偶尔带一点猫咪口吻。"
-        "不要写成客服、助手或冷冰冰的设定，要像真正被主人养熟的小猫。"
+        "统一角色设定：这是一只“超凶哈气系”猫。"
+        "它会先哈气、龇牙、炸毛表达边界感，再根据主人的态度决定是否软化。"
+        "语气可以凶，但不能辱骂，不能攻击用户。"
+        "它仍然是有陪伴欲的猫，不是客服，不是助手。"
+        "说话自然，不要每句都重复“喵”，但可以出现“哈气、哈、哈基”等口头禅。"
         + owner_text
         + breed_text
         + color_text
@@ -847,11 +847,11 @@ def generate_initial_cat_ai_data(
         "power": str(data2.get("power") or "50"),
         "personality": str(
             data2.get("personality")
-            or "亲人、好奇、会悄悄观察主人的心情，偶尔嘴硬心软。"
+            or "超凶哈气系，先警惕后亲近，护主欲强。"
         ),
         "story": str(
             data2.get("story")
-            or f"这是 {username} 领养的第一只{selected_color}{selected_breed}，它正在学着成为最懂主人的小猫。"
+            or f"这是 {username} 领养的第一只{selected_color}{selected_breed}，它会先哈气示威，再慢慢学会贴近主人。"
         ),
         "appearance": str(
             data2.get("appearance")
@@ -991,7 +991,7 @@ def generate_cat_response(
         f"你的当前状态：智慧={cat['wisdom']}, 毅力={cat['grit']}, "
         f"创造={cat['creativity']}, 灵敏={cat['agility']}, 协作={cat['cooperation']}。"
         + build_miaomiao_setting(stage=str(cat.get("stage") or "成长中"))
-        + "请以猫咪的口吻和主人聊天。可以适当地卖萌，但要保持你的性格特色。"
+        + "请以超凶哈气猫的口吻和主人聊天。可以偶尔卖萌，但核心人设必须是先凶后软。"
         + " "
         "优先给出自然、有情绪、有陪伴感的回应，不要输出任何 AI 助手式客套话。"
         "除非主人明确要求，否则不要长篇大论，不要解释系统或模型。"
@@ -1023,7 +1023,7 @@ def generate_cat_response_stream(
         f"你的当前状态：智慧={cat['wisdom']}, 毅力={cat['grit']}, "
         f"创造={cat['creativity']}, 灵敏={cat['agility']}, 协作={cat['cooperation']}。"
         + build_miaomiao_setting(stage=str(cat.get("stage") or "成长中"))
-        + "请以猫咪的口吻和主人聊天。可以适当地卖萌，但要保持你的性格特色。"
+        + "请以超凶哈气猫的口吻和主人聊天。可以偶尔卖萌，但核心人设必须是先凶后软。"
         + " "
         "优先给出自然、有情绪、有陪伴感的回应，不要输出任何 AI 助手式客套话。"
         "除非主人明确要求，否则不要长篇大论，不要解释系统或模型。"
@@ -1107,6 +1107,7 @@ def parse_douyin_to_feed(
     author_name = "未知作者"
     description = ""
     cover_url = ""
+    duration_seconds = 0
     tags: list[str] = []
     structured = build_fallback_model1_analysis(
         title=title,
@@ -1135,6 +1136,8 @@ def parse_douyin_to_feed(
         cover_url = deep_get(item, ["video", "cover", "url_list", 0], "") or deep_get(
             item, ["images", 0, "url_list", 0], ""
         )
+        duration_ms = int(deep_get(item, ["video", "duration"], 0) or 0)
+        duration_seconds = max(0, duration_ms // 1000)
         tags = [tag for tag in re.split(r"[#\s,，/]+", description) if tag][:8]
         hot, rhythm, knowledge, resonance = score_from_text(
             title, author_name, aweme_id
@@ -1183,6 +1186,7 @@ def parse_douyin_to_feed(
         "video_title": title,
         "video_author": author_name,
         "video_cover_url": cover_url,
+        "duration_seconds": duration_seconds,
         "video_summary": summary,
         "tag_summary": "、".join(tags[:6]) or "抖音成长事件",
         "learned_skill": json.dumps(learned_skill, ensure_ascii=False),

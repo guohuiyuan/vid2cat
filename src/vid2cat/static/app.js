@@ -792,7 +792,7 @@ document.addEventListener("DOMContentLoaded", () => {
         const isFeed = containsDouyinUrl(value);
         if (isFeed && !feedLocked) {
             interactionSubmitButton.textContent = "开始喂养";
-            interactionHint.textContent = "检测到抖音链接，提交后会进入喂养和形象更新流程。";
+            interactionHint.textContent = "检测到抖音链接，提交后会进入喂养和形象更新流程（仅支持不超过 1 分钟的视频）。";
             return;
         }
         if (isFeed && feedLocked) {
