@@ -1223,7 +1223,9 @@ def parse_douyin_to_feed(
         description = f"解析时出现异常：{exc}"
 
     if duration_seconds <= 0:
-        raise ValueError("未能识别视频时长，无法校验 1 分钟限制。请换一个可公开访问且不超过 1 分钟的抖音视频。")
+        raise ValueError(
+            "未能识别视频时长，无法校验 1 分钟限制。请换一个可公开访问且不超过 1 分钟的抖音视频。"
+        )
     if duration_seconds > 60:
         raise ValueError(
             f"当前视频时长约 {duration_seconds} 秒，超过 1 分钟。请换一个不超过 1 分钟的抖音视频。"
