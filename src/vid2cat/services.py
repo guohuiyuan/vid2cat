@@ -846,8 +846,7 @@ def generate_initial_cat_ai_data(
         "skill": str(data2.get("skill") or "卖萌"),
         "power": str(data2.get("power") or "50"),
         "personality": str(
-            data2.get("personality")
-            or "超凶哈气系，先警惕后亲近，护主欲强。"
+            data2.get("personality") or "超凶哈气系，先警惕后亲近，护主欲强。"
         ),
         "story": str(
             data2.get("story")
