@@ -44,6 +44,13 @@ DAILY_TRAINING_ACTIONS: dict[str, dict[str, Any]] = {
         "description": "哈气修炼，随机获得经验值。",
         "summary": "一口哈气把状态顶起来了，情绪和节奏都更稳了。",
     },
+    "hit": {
+        "label": "击打",
+        "exp_min": 10,
+        "exp_max": 15,
+        "description": "击打训练，稳定提升经验。",
+        "summary": "连续击打练习后，反应速度和爆发力都上来了。",
+    },
 }
 
 
@@ -1341,6 +1348,8 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
     normalized_action_key = action_key
     if action_key in {"sunbath", "groom"}:
         normalized_action_key = "haqi"
+    if action_key in {"beat", "strike"}:
+        normalized_action_key = "hit"
 
     action = DAILY_TRAINING_ACTIONS.get(normalized_action_key)
     if not action:
