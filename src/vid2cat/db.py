@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
@@ -36,17 +37,12 @@ DEFAULT_SETTINGS = {
 MAX_CAT_LEVEL = 6
 DEFAULT_EXP_TO_NEXT = 100
 DAILY_TRAINING_ACTIONS: dict[str, dict[str, Any]] = {
-    "sunbath": {
-        "label": "晒太阳",
-        "exp_gain": 18,
-        "description": "猫族经典，晒太阳时状态自然恢复。",
-        "summary": "晒了一会儿太阳，毛茸茸的身体慢慢暖起来了，状态也在静静回升。",
-    },
-    "groom": {
-        "label": "冥想",
-        "exp_gain": 30,
-        "description": "舔毛动作是最高效的冥想方式。",
-        "summary": "通过舔毛和整理呼吸进入冥想状态，心绪沉静下来，经验涨得很快。",
+    "haqi": {
+        "label": "哈气",
+        "exp_min": 5,
+        "exp_max": 30,
+        "description": "哈气修炼，随机获得经验值。",
+        "summary": "一口哈气把状态顶起来了，情绪和节奏都更稳了。",
     },
 }
 
@@ -1321,7 +1317,11 @@ def add_cat_feed_record(
 
 
 def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
-    action = DAILY_TRAINING_ACTIONS.get(action_key)
+    normalized_action_key = action_key
+    if action_key in {"sunbath", "groom"}:
+        normalized_action_key = "haqi"
+
+    action = DAILY_TRAINING_ACTIONS.get(normalized_action_key)
     if not action:
         raise ValueError("未知的修炼方式")
     now = utcnow()
@@ -1337,8 +1337,16 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
             raise ValueError("这只猫已经满级，不需要继续修炼经验了。")
         exp_to_next = int(cat.get("exp_to_next") or compute_exp_to_next(level))
         current_exp = int(cat.get("exp") or 0)
-        new_exp = min(exp_to_next, current_exp + int(action["exp_gain"]))
-        latest_summary = f"{action['label']}完成，获得 {int(action['exp_gain'])} 点经验。{action['summary']}"
+        exp_min = int(action.get("exp_min") or action.get("exp_gain") or 5)
+        exp_max = int(action.get("exp_max") or action.get("exp_gain") or 30)
+        if exp_min > exp_max:
+            exp_min, exp_max = exp_max, exp_min
+        exp_gain = random.randint(exp_min, exp_max)
+
+        new_exp = min(exp_to_next, current_exp + exp_gain)
+        latest_summary = (
+            f"{action['label']}完成，随机获得 {exp_gain} 点经验。{action['summary']}"
+        )
         if new_exp >= exp_to_next:
             latest_summary += f" 当前经验已满，可以喂第 {int(cat.get('feed_count') or 0) + 1} 个视频了。"
 
@@ -1347,7 +1355,7 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
             INSERT INTO cat_training_records (cat_id, action_key, exp_gain, summary, created_at)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (cat_id, action["label"], int(action["exp_gain"]), latest_summary, now),
+            (cat_id, action["label"], exp_gain, latest_summary, now),
         )
 
         conn.execute(
@@ -1366,7 +1374,7 @@ def perform_daily_training(cat_id: int, action_key: str) -> dict[str, Any]:
     return {
         "cat": updated_cat,
         "action": action,
-        "exp_gain": int(action["exp_gain"]),
+        "exp_gain": exp_gain,
         "exp_full": int(updated_cat.get("exp") or 0)
         >= int(updated_cat.get("exp_to_next") or 0)
         > 0,

@@ -109,8 +109,34 @@ CAT_STAT_LABELS = {
     "agility": "灵敏",
     "cooperation": "协作",
 }
-INITIAL_CAT_BREEDS = ["布偶猫", "橘猫", "英短", "缅因猫", "奶牛猫", "森林猫"]
-INITIAL_CAT_COLORS = ["奶油白", "橘金色", "雾霾灰", "黑白双色", "琥珀棕", "樱花粉"]
+INITIAL_CAT_BREEDS = [
+    "布偶猫",
+    "橘猫",
+    "英短",
+    "缅因猫",
+    "奶牛猫",
+    "森林猫",
+    "暹罗猫",
+    "狸花猫",
+    "银渐层",
+    "金渐层",
+    "德文卷毛",
+    "斯芬克斯",
+]
+INITIAL_CAT_COLORS = [
+    "奶油白",
+    "橘金色",
+    "雾霾灰",
+    "黑白双色",
+    "琥珀棕",
+    "樱花粉",
+    "海盐蓝",
+    "银月白",
+    "焦糖棕",
+    "曜石黑",
+    "薄荷青",
+    "丁香紫灰",
+]
 
 
 def build_atlas_card(atlas: dict) -> dict:
@@ -301,7 +327,14 @@ def build_training_cards() -> list[dict[str, Any]]:
             "key": key,
             "label": str(config["label"]),
             "description": str(config["description"]),
-            "exp_gain": int(config["exp_gain"]),
+            "exp_min": int(config.get("exp_min") or config.get("exp_gain") or 0),
+            "exp_max": int(config.get("exp_max") or config.get("exp_gain") or 0),
+            "exp_hint": (
+                f"经验 +{int(config.get('exp_min') or config.get('exp_gain') or 0)}~{int(config.get('exp_max') or config.get('exp_gain') or 0)}"
+                if int(config.get("exp_min") or config.get("exp_gain") or 0)
+                != int(config.get("exp_max") or config.get("exp_gain") or 0)
+                else f"经验 +{int(config.get('exp_gain') or config.get('exp_min') or 0)}"
+            ),
         }
         for key, config in DAILY_TRAINING_ACTIONS.items()
     ]
