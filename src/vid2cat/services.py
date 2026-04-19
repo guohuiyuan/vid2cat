@@ -22,7 +22,8 @@ DEFAULT_HEADERS = {
 ROUTER_DATA_RE = re.compile(r"window\._ROUTER_DATA\s*=\s*(.*?)</script>", re.S | re.I)
 DOUYIN_URL_RE = re.compile(r"https?://[^\s]+")
 VIDEO_ID_RE = re.compile(r"(?:video|note)/(\d+)")
-SKILL_SUFFIXES = ["感知", "步法", "共鸣", "拟态", "冥想", "突袭"]
+SKILL_SUFFIXES = ["哈感知", "哈步法", "哈共鸣", "哈拟态", "哈冥想", "哈气突袭"]
+HAKIMI_BRAND_WORDS = ["哈", "哈基", "耄", "哈气"]
 
 
 @dataclass(slots=True)
@@ -246,6 +247,7 @@ def generate_cat_profile_with_model2(
         f"摘要：{summary}\n"
         f"标签：{'、'.join(tags) or '抖音、猫咪图鉴'}\n\n"
         "请让这只猫既有鲜明个性，也保留温暖陪伴感。\n"
+        "技能命名和故事语气尽量融入“哈、哈基、耄、哈气”的品牌口头禅，但不要生硬堆词。\n"
         "请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
@@ -700,8 +702,10 @@ def build_feed_skill(title: str, tags: list[str], score: int = 70) -> dict[str, 
     if not seed_text:
         compact_title = re.sub(r"[^\u4e00-\u9fffA-Za-z0-9]", "", title or "")
         seed_text = (compact_title[:4] or "视频")
-    suffix = SKILL_SUFFIXES[sum(ord(ch) for ch in seed_text) % len(SKILL_SUFFIXES)]
-    name = f"{seed_text}{suffix}"
+    seed_value = sum(ord(ch) for ch in seed_text)
+    suffix = SKILL_SUFFIXES[seed_value % len(SKILL_SUFFIXES)]
+    brand_prefix = HAKIMI_BRAND_WORDS[seed_value % len(HAKIMI_BRAND_WORDS)]
+    name = f"{brand_prefix}{seed_text}{suffix}"
     
     rarity = "N"
     if score >= 90:
@@ -747,6 +751,7 @@ def generate_initial_cat_ai_data(
         f"用户选择的品种是：{selected_breed}。\n"
         f"用户选择的毛色是：{selected_color}。\n"
         "如果没有额外图片参考，需要围绕这两个选项给出稳定、可直接生图的形象描述。\n"
+        "技能名和故事语气请自然带一点“哈、哈基、耄、哈气”的哈基米耄耋风格。\n"
         "请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
@@ -803,7 +808,8 @@ def generate_final_cat_persona(
         f"协作: {stats.get('cooperation', 50)}\n\n"
         f"这只猫咪喂养过程中吸收的内容总结如下：\n"
         + "\n".join([f"{i+1}. {s}" for i, s in enumerate(summaries)])
-        + "\n\n请返回 JSON，字段必须包含："
+        + "\n\n技能名、性格和故事语气请自然融入“哈、哈基、耄、哈气”风格。"
+        "\n请返回 JSON，字段必须包含："
         "name, breed, skill, power, personality, story, appearance, rarity, image_prompt。"
     )
     raw = AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.8)
@@ -892,6 +898,81 @@ def generate_cat_response(
     return AIModelRuntime.complete_text(config, system_prompt, user_prompt, temperature=0.9)
 
 
+def generate_cat_response_stream(
+    settings: dict[str, str],
+    cat: dict[str, Any],
+    messages: list[dict[str, str]],
+) -> list[str]:
+    config = build_model_config(settings, 2)
+    system_prompt = (
+        f"你现在是一只动漫猫，你的名字叫 {cat['name']}。"
+        f"你的性格是：{cat['personality']}。"
+        f"你的背景故事是：{cat['story_summary']}。"
+        f"你的当前状态：智慧={cat['wisdom']}, 毅力={cat['grit']}, "
+        f"创造={cat['creativity']}, 灵敏={cat['agility']}, 协作={cat['cooperation']}。"
+        + build_miaomiao_setting(stage=str(cat.get("stage") or "成长中"))
+        + "请以猫咪的口吻和主人聊天。可以适当地卖萌，但要保持你的性格特色。"
+        + " "
+        "优先给出自然、有情绪、有陪伴感的回应，不要输出任何 AI 助手式客套话。"
+        "除非主人明确要求，否则不要长篇大论，不要解释系统或模型。"
+    )
+    recent_messages = messages[-10:]
+    history = "\n".join(
+        [f"{'主人' if m['role'] == 'user' else '猫咪'}: {m['content']}" for m in recent_messages]
+    )
+    user_prompt = (
+        f"对话记录：\n{history}\n\n主人最后说：{messages[-1]['content']}\n\n请回复主人："
+    )
+    try:
+        return AIModelRuntime.stream_text(
+            config, system_prompt, user_prompt, temperature=0.9
+        )
+    except Exception:
+        fallback = AIModelRuntime.complete_text(
+            config, system_prompt, user_prompt, temperature=0.9
+        )
+        return list(fallback)
+
+
+def generate_feed_commentary_with_model2(
+    settings: dict[str, str] | None,
+    title: str,
+    summary: str,
+    deltas: dict[str, int],
+    learned_skill: dict[str, str],
+) -> str:
+    fallback = (
+        f"哈基成长感悟：看完《{title[:18]}》，它学会了「{learned_skill.get('name', '哈拟态')}」，"
+        f"属性变化像在哈气蓄力，智慧+{deltas.get('wisdom_delta', 0)}、毅力+{deltas.get('grit_delta', 0)}、"
+        f"创造+{deltas.get('creativity_delta', 0)}、灵敏+{deltas.get('agility_delta', 0)}、协作+{deltas.get('cooperation_delta', 0)}。"
+    )
+    if not settings or not settings.get("ai_model_2_model"):
+        return fallback
+
+    config = build_model_config(settings, 2)
+    system_prompt = (
+        "你是猫咪成长解说员。请输出 2-3 句中文短文，必须包含这四个字样：哈、哈基、耄、哈气。"
+        "内容包含：猫咪感悟、技能解说、5维属性变化解说。"
+        "语气要自然、有角色感，避免机械罗列。不要输出 JSON。"
+    )
+    user_prompt = (
+        f"视频标题：{title}\n"
+        f"视频摘要：{summary}\n"
+        f"新技能：{learned_skill.get('rarity', 'R')} {learned_skill.get('name', '哈拟态')}\n"
+        f"属性变化：智慧 {deltas.get('wisdom_delta', 0)}，毅力 {deltas.get('grit_delta', 0)}，"
+        f"创造 {deltas.get('creativity_delta', 0)}，灵敏 {deltas.get('agility_delta', 0)}，协作 {deltas.get('cooperation_delta', 0)}。\n"
+        "请给出“猫咪感悟 + 技能解说 + 属性解说词”。"
+    )
+    try:
+        text = AIModelRuntime.complete_text(
+            config, system_prompt, user_prompt, temperature=0.85
+        )
+        cleaned = str(text or "").strip()
+        return cleaned or fallback
+    except Exception:
+        return fallback
+
+
 def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> dict[str, Any]:
     source_url = extract_first_url(url) or url.strip()
     if not is_douyin_url(source_url):
@@ -972,6 +1053,13 @@ def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> di
     total_score = int(structured.get("total_score", 70) or 70)
     learned_skill = build_feed_skill(title, tags, total_score)
     summary = str(structured.get("full_summary") or description or title).strip()
+    skill_commentary = generate_feed_commentary_with_model2(
+        settings,
+        title,
+        summary,
+        deltas,
+        learned_skill,
+    )
     return {
         "source_url": source_url,
         "canonical_url": canonical_url,
@@ -982,6 +1070,7 @@ def parse_douyin_to_feed(url: str, settings: dict[str, str] | None = None) -> di
         "video_summary": summary,
         "tag_summary": "、".join(tags[:6]) or "抖音成长事件",
         "learned_skill": json.dumps(learned_skill, ensure_ascii=False),
+        "skill_commentary": skill_commentary,
         "model1_output": json.dumps(structured, ensure_ascii=False),
         **deltas,
     }

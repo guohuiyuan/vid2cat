@@ -118,6 +118,7 @@
                             <p class="card-summary">{{ card.summary }}</p>
                             <form class="action-row" action="/admin/cats/delete" method="post">
                                 <input type="hidden" name="cat_id" value="{{ card.id }}">
+                                <input type="hidden" name="market_page" value="{{ market_page }}">
                                 <button class="danger-btn full-width" type="submit" onclick="return confirm('确认删除这只猫？该操作不可恢复。');">
                                     删除猫咪
                                 </button>
@@ -126,6 +127,23 @@
                     </article>
                     {% endfor %}
                 </div>
+                {% if market_total_pages > 1 %}
+                <nav class="pagination-row" aria-label="后台市场分页">
+                    {% if market_page > 1 %}
+                    <a class="ghost-btn anchor-btn" href="/admin?market_page={{ market_page - 1 }}">上一页</a>
+                    {% else %}
+                    <span class="ghost-btn disabled">上一页</span>
+                    {% endif %}
+
+                    <span class="pagination-summary">第 {{ market_page }} / {{ market_total_pages }} 页</span>
+
+                    {% if market_page < market_total_pages %}
+                    <a class="ghost-btn anchor-btn" href="/admin?market_page={{ market_page + 1 }}">下一页</a>
+                    {% else %}
+                    <span class="ghost-btn disabled">下一页</span>
+                    {% endif %}
+                </nav>
+                {% endif %}
                 {% else %}
                 <div class="empty-state compact">当前市场暂无可管理的猫咪。</div>
                 {% endif %}

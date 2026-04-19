@@ -14,7 +14,7 @@
         <div class="section-title-row">
             <div>
                 <h2>猫咪市场</h2>
-                <span class="section-hint">这里展示公开展示的猫咪，以及已经放入市场、等待重新领养的猫咪</span>
+                <span class="section-hint">这里展示公开展示的猫咪，以及已经放入市场、等待重新领养的猫咪（共 {{ market_total }} 只）</span>
             </div>
             <a class="ghost-btn anchor-btn" href="/my-cat">返回我的猫</a>
         </div>
@@ -57,6 +57,7 @@
                 {% if card.available_for_adoption and current_user %}
                 <form action="/plaza/adopt" method="POST" class="market-card-action">
                     <input type="hidden" name="cat_id" value="{{ card.id }}">
+                    <input type="hidden" name="page" value="{{ page }}">
                     <button type="submit" class="primary-btn full-width">领养这只猫</button>
                 </form>
                 {% elif card.available_for_adoption %}
@@ -79,6 +80,24 @@
         </article>
         {% endfor %}
     </section>
+
+    {% if total_pages > 1 %}
+    <nav class="pagination-row" aria-label="猫咪市场分页">
+        {% if page > 1 %}
+        <a class="ghost-btn anchor-btn" href="/plaza?page={{ page - 1 }}">上一页</a>
+        {% else %}
+        <span class="ghost-btn disabled">上一页</span>
+        {% endif %}
+
+        <span class="pagination-summary">第 {{ page }} / {{ total_pages }} 页</span>
+
+        {% if page < total_pages %}
+        <a class="ghost-btn anchor-btn" href="/plaza?page={{ page + 1 }}">下一页</a>
+        {% else %}
+        <span class="ghost-btn disabled">下一页</span>
+        {% endif %}
+    </nav>
+    {% endif %}
     {% else %}
     <div class="empty-state">
         <p>市场里还没有可浏览的猫咪，先去养成并发布你的第一只猫吧。</p>

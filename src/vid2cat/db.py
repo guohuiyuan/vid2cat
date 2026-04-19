@@ -224,6 +224,7 @@ def init_db() -> None:
                 agility_delta INTEGER NOT NULL DEFAULT 0,
                 cooperation_delta INTEGER NOT NULL DEFAULT 0,
                 learned_skill TEXT NOT NULL DEFAULT '',
+                skill_commentary TEXT NOT NULL DEFAULT '',
                 model1_output TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(cat_id) REFERENCES cats(id)
@@ -285,6 +286,12 @@ def init_db() -> None:
         )
         ensure_column(
             conn, "cat_feed_records", "learned_skill", "TEXT NOT NULL DEFAULT ''"
+        )
+        ensure_column(
+            conn,
+            "cat_feed_records",
+            "skill_commentary",
+            "TEXT NOT NULL DEFAULT ''",
         )
 
         # 迁移：移除 cats 表 user_id 的 UNIQUE 约束 (SQLite 需要通过重建表实现)
@@ -1185,6 +1192,7 @@ def add_cat_feed_record(
         )
         learned_skills = parse_skill_list(str(cat.get("learned_skills_json") or ""))
         learned_skill_raw = str(feed_result.get("learned_skill") or "").strip()
+        skill_commentary = str(feed_result.get("skill_commentary") or "").strip()
         learned_skill_obj = None
         learned_skill_name = ""
         if learned_skill_raw:
@@ -1230,15 +1238,17 @@ def add_cat_feed_record(
             latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级，并学会技能「{learned_skill_name}」。"
         else:
             latest_summary = f"通过视频《{str(feed_result.get('video_title') or '未命名视频')}》升到 {next_level} 级。"
+        if skill_commentary:
+            latest_summary = f"{latest_summary} {skill_commentary}"
 
         conn.execute(
             """
             INSERT INTO cat_feed_records (
                 cat_id, feed_index, source_url, canonical_url, aweme_id, video_title, video_author,
                 video_cover_url, video_summary, tag_summary, wisdom_delta, grit_delta,
-                creativity_delta, agility_delta, cooperation_delta, learned_skill, model1_output, created_at
+                creativity_delta, agility_delta, cooperation_delta, learned_skill, skill_commentary, model1_output, created_at
             ) VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )
             """,
             (
@@ -1258,6 +1268,7 @@ def add_cat_feed_record(
                 int(feed_result.get("agility_delta") or 0),
                 int(feed_result.get("cooperation_delta") or 0),
                 learned_skill_raw,
+                skill_commentary,
                 str(feed_result.get("model1_output") or ""),
                 now,
             ),
@@ -1550,7 +1561,19 @@ def update_cat_public_status(cat_id: int, is_public: bool) -> None:
         )
 
 
-def list_public_cats(limit: int = 12) -> list[dict[str, Any]]:
+def count_public_cats() -> int:
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT COUNT(*) AS total
+            FROM cats
+            WHERE is_public = 1 OR available_for_adoption = 1
+            """
+        ).fetchone()
+    return int((row["total"] if row else 0) or 0)
+
+
+def list_public_cats(limit: int = 12, offset: int = 0) -> list[dict[str, Any]]:
     with get_connection() as conn:
         rows = conn.execute(
             """
@@ -1560,8 +1583,9 @@ def list_public_cats(limit: int = 12) -> list[dict[str, Any]]:
             WHERE is_public = 1 OR available_for_adoption = 1
             ORDER BY available_for_adoption DESC, cats.updated_at DESC
             LIMIT ?
+            OFFSET ?
             """,
-            (limit,),
+            (limit, max(0, int(offset))),
         ).fetchall()
     return [dict(row) for row in rows]
 

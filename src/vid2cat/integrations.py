@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import base64
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -97,6 +98,56 @@ class AIModelRuntime:
         return content.strip()
 
     @staticmethod
+    def stream_text(
+        config: AIModelConfig,
+        system_prompt: str,
+        user_prompt: str,
+        temperature: float = 0.4,
+    ) -> list[str]:
+        if not config.api_url or not config.api_key or not config.model:
+            raise ValueError("模型配置不完整")
+
+        endpoint = AIModelRuntime._chat_endpoint(config.api_url)
+        payload = {
+            "model": config.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            "temperature": temperature,
+            "stream": True,
+        }
+        headers = {
+            "Authorization": f"Bearer {config.api_key}",
+            "Content-Type": "application/json",
+        }
+        chunks: list[str] = []
+        with httpx.Client(timeout=120.0) as client:
+            with client.stream("POST", endpoint, headers=headers, json=payload) as response:
+                response.raise_for_status()
+                for line in response.iter_lines():
+                    if not line:
+                        continue
+                    text_line = line.decode("utf-8") if isinstance(line, bytes) else str(line)
+                    if not text_line.startswith("data:"):
+                        continue
+                    payload_line = text_line[5:].strip()
+                    if not payload_line:
+                        continue
+                    if payload_line == "[DONE]":
+                        break
+                    try:
+                        data = json.loads(payload_line)
+                    except json.JSONDecodeError:
+                        continue
+                    token = AIModelRuntime._extract_stream_text(data)
+                    if token:
+                        chunks.append(token)
+        if not chunks:
+            raise RuntimeError("模型流式返回为空")
+        return chunks
+
+    @staticmethod
     def generate_image(
         config: AIModelConfig,
         prompt: str,
@@ -188,6 +239,21 @@ class AIModelRuntime:
                 return "\n".join(chunks)
 
         raise RuntimeError("模型未返回可识别的文本字段")
+
+    @staticmethod
+    def _extract_stream_text(data: dict[str, Any]) -> str:
+        choices = data.get("choices") or []
+        if choices:
+            first = choices[0] or {}
+            delta = first.get("delta") or {}
+            text = AIModelRuntime._flatten_content(delta.get("content"))
+            if text:
+                return text
+            text = AIModelRuntime._flatten_content(first.get("text"))
+            if text:
+                return text
+        text = AIModelRuntime._flatten_content(data.get("output_text"))
+        return text or ""
 
 
 class ImageHostScaffold:

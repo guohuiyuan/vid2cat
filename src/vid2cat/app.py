@@ -36,6 +36,7 @@ from .db import (
     authenticate_admin,
     authenticate_user,
     count_user_owned_cats,
+    count_public_cats,
     create_guest_user,
     create_initial_cat_for_user,
     get_atlas,
@@ -74,6 +75,7 @@ from .services import (
     build_growth_image_profile,
     extract_first_url,
     generate_cat_response,
+    generate_cat_response_stream,
     generate_cat_image_with_model3,
     generate_initial_cat_ai_data,
     is_douyin_url,
@@ -410,6 +412,9 @@ def build_feed_growth_summary(event_data: dict[str, Any]) -> str:
         if skill_rarity
         else f"新技能：「{skill_name}」"
     )
+    commentary = str(event_data.get("skill_commentary") or "").strip()
+    if commentary:
+        return f"{skill_text} | {growth_text} | {commentary}"
     return f"{skill_text} | {growth_text}"
 
 
@@ -1015,14 +1020,17 @@ async def my_cat_chat_stream(request: Request, content: str = Form(...)):
         try:
             yield f"data: {json.dumps({'type': 'start'}, ensure_ascii=False)}\n\n"
             await asyncio.sleep(0)
-            response = await asyncio.to_thread(
-                generate_cat_response, settings, cat, chat_history
-            )
             assembled = ""
-            for chunk in response:
-                assembled += chunk
-                yield f"data: {json.dumps({'type': 'token', 'token': chunk}, ensure_ascii=False)}\n\n"
-                await asyncio.sleep(0.01)
+            chunks = await asyncio.to_thread(
+                generate_cat_response_stream, settings, cat, chat_history
+            )
+            for chunk in chunks:
+                if not chunk:
+                    continue
+                for char in chunk:
+                    assembled += char
+                    yield f"data: {json.dumps({'type': 'token', 'token': char}, ensure_ascii=False)}\n\n"
+                    await asyncio.sleep(0)
             add_cat_message(int(cat["id"]), "assistant", assembled)
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
         except Exception as exc:
@@ -1344,10 +1352,19 @@ def my_cat_publish_toggle(request: Request, is_public: int = Form(...)):
 @app.get("/plaza")
 def cat_plaza_page(
     request: Request,
+    page: int = Query(default=1, ge=1),
     message: str = Query(default=""),
     error: str = Query(default=""),
 ):
-    public_cats = [build_cat_card(row) for row in list_public_cats(limit=36)]
+    page_size = 12
+    total_count = count_public_cats()
+    total_pages = max(1, (total_count + page_size - 1) // page_size)
+    current_page = min(max(1, int(page)), total_pages)
+    offset = (current_page - 1) * page_size
+    public_cats = [
+        build_cat_card(row)
+        for row in list_public_cats(limit=page_size, offset=offset)
+    ]
     return templates.TemplateResponse(
         request=request,
         name="plaza.html",
@@ -1356,6 +1373,10 @@ def cat_plaza_page(
             "message": message,
             "error": error,
             "cat_cards": public_cats,
+            "page": current_page,
+            "total_pages": total_pages,
+            "page_size": page_size,
+            "market_total": total_count,
             "admin_user": get_current_admin(request),
             "current_user": get_current_user(request),
         },
@@ -1363,14 +1384,14 @@ def cat_plaza_page(
 
 
 @app.post("/plaza/adopt")
-def plaza_adopt(request: Request, cat_id: int = Form(...)):
+def plaza_adopt(request: Request, cat_id: int = Form(...), page: int = Form(default=1)):
     current_user = get_or_create_session_user(request)
     try:
         adopted = adopt_plaza_cat(cat_id, int(current_user["id"]))
     except Exception as exc:
-        return redirect_with_message("/plaza", error=str(exc))
+        return redirect_with_message("/plaza", error=str(exc), extra={"page": str(max(1, page))})
     if not adopted:
-        return redirect_with_message("/plaza", error="领养失败")
+        return redirect_with_message("/plaza", error="领养失败", extra={"page": str(max(1, page))})
     return redirect_with_message("/my-cat", message=f"已成功领养 {adopted['name']}")
 
 
@@ -1575,6 +1596,7 @@ def admin_password_submit(
 @app.get("/admin")
 def admin_dashboard(
     request: Request,
+    market_page: int = Query(default=1, ge=1),
     message: str = Query(default=""),
     error: str = Query(default=""),
     uploaded_url: str = Query(default=""),
@@ -1583,7 +1605,15 @@ def admin_dashboard(
     if redirect:
         return redirect
     settings = get_settings()
-    market_cats = [build_cat_card(row) for row in list_public_cats(limit=200)]
+    market_page_size = 18
+    market_total_count = count_public_cats()
+    market_total_pages = max(1, (market_total_count + market_page_size - 1) // market_page_size)
+    current_market_page = min(max(1, int(market_page)), market_total_pages)
+    market_offset = (current_market_page - 1) * market_page_size
+    market_cats = [
+        build_cat_card(row)
+        for row in list_public_cats(limit=market_page_size, offset=market_offset)
+    ]
     return templates.TemplateResponse(
         request=request,
         name="admin_dashboard.html",
@@ -1602,7 +1632,9 @@ def admin_dashboard(
             "uploaded_url": uploaded_url,
             "image_host_status": ImageHostScaffold.describe(settings),
             "market_cats": market_cats,
-            "market_cats_count": len(market_cats),
+            "market_cats_count": market_total_count,
+            "market_page": current_market_page,
+            "market_total_pages": market_total_pages,
         },
     )
 
@@ -1650,14 +1682,26 @@ async def admin_upload_test(request: Request, image: UploadFile = File(...)):
 
 
 @app.post("/admin/cats/delete")
-def admin_delete_cat_submit(request: Request, cat_id: int = Form(...)):
+def admin_delete_cat_submit(
+    request: Request,
+    cat_id: int = Form(...),
+    market_page: int = Form(default=1),
+):
     admin, redirect = require_admin(request)
     if redirect:
         return redirect
     deleted = admin_delete_cat(cat_id)
     if not deleted:
-        return redirect_with_message("/admin", error="猫咪不存在或已被删除")
-    return redirect_with_message("/admin", message=f"已删除猫咪 #{cat_id}")
+        return redirect_with_message(
+            "/admin",
+            error="猫咪不存在或已被删除",
+            extra={"market_page": str(max(1, market_page))},
+        )
+    return redirect_with_message(
+        "/admin",
+        message=f"已删除猫咪 #{cat_id}",
+        extra={"market_page": str(max(1, market_page))},
+    )
 
 
 def main() -> None:
